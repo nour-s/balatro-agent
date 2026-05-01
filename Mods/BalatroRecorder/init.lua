@@ -60,12 +60,18 @@ function BrecInit.startup()
     -- ── evaluate_play (scoring loop wrapper) ──
     local orig_eval_play = G.FUNCS.evaluate_play
     G.FUNCS.evaluate_play = function(e)
-        -- reset chain before scoring
         BREC.scoring_chain = {}
         BREC.scoring_base  = { hand_type = nil, base_chips = 0, base_mult = 0 }
         orig_eval_play(e)
-        -- emit hand_resolution after all events have been queued
-        -- (actual call happens in update loop when state transitions back)
+        -- capture hand info immediately after scoring; current_hand is cleared later
+        if G.GAME and G.GAME.current_round then
+            local ch = G.GAME.current_round.current_hand or {}
+            BREC.last_hand_info = {
+                hand_type = ch.handname or "",
+                chips     = ch.chips or 0,
+                mult      = ch.mult  or 0,
+            }
+        end
     end
 
     -- ── buy_from_shop ──
@@ -99,8 +105,9 @@ function BrecInit.startup()
     -- ── skip_blind ──
     local orig_skip_blind = G.FUNCS.skip_blind
     G.FUNCS.skip_blind = function(e)
-        safe(h.on_blind_skipped, e)
+        local tags_before = G.tags and #G.tags or 0
         orig_skip_blind(e)
+        safe(h.on_blind_skipped, e, tags_before)
     end
 
     -- ── reroll_boss ──
@@ -212,8 +219,9 @@ function BrecInit.update()
 
     local h = require("hooks")
 
-    -- ── Run init on first entering SELECTING_HAND after start_run ──
-    if BREC.run_pending_init and G.STATE == G.STATES.SELECTING_HAND then
+    -- ── Run init: activate as soon as we hit BLIND_SELECT or later ──
+    if BREC.run_pending_init and
+       (G.STATE == 7 or G.STATE == 19 or G.STATE == G.STATES.SELECTING_HAND) then
         BREC.run_pending_init = false
         BREC.active           = true
         BREC.rng_index        = 0
@@ -233,21 +241,18 @@ function BrecInit.update()
         safe(h.on_state_change, BREC.prev_state, cur_state)
         BREC.prev_state = cur_state
 
-        -- HAND_PLAYED → DRAW_TO_HAND: scoring is done, emit hand resolution
-        if cur_state == G.STATES.DRAW_TO_HAND and last_hand_play_state == G.STATES.HAND_PLAYED then
-            if BREC.state_before_hand then
-                local cr = G.GAME.current_round or {}
-                local ch = cr.current_hand or {}
-                -- approximate final chips from G.GAME.chips delta
-                local chips_after   = G.GAME.chips or 0
-                local chips_before  = BREC.state_before_hand.chips_scored or 0
-                local score_delta   = chips_after - chips_before
-                safe(h.on_hand_result,
-                    ch.handname or "Unknown",
-                    ch.chips or 0,
-                    ch.mult  or 0,
-                    score_delta)
-            end
+        -- Scoring done: HAND_PLAYED → DRAW_TO_HAND (mid-round) or → NEW_ROUND / GAME_OVER (last hand)
+        local scoring_done = last_hand_play_state == G.STATES.HAND_PLAYED and
+            (cur_state == G.STATES.DRAW_TO_HAND or cur_state == 19 or cur_state == 4)
+        if scoring_done and BREC.state_before_hand then
+            local info        = BREC.last_hand_info or {}
+            local chips_before = BREC.state_before_hand.chips_scored or 0
+            local chips_after  = G.GAME.chips or 0
+            safe(h.on_hand_result,
+                info.hand_type or "",
+                info.chips     or 0,
+                info.mult      or 0,
+                chips_after - chips_before)
         end
 
         last_hand_play_state = cur_state

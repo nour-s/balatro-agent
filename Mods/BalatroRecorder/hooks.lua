@@ -194,12 +194,22 @@ function Hooks.on_blind_selected(e)
     })
 end
 
-function Hooks.on_blind_skipped(e)
-    rec.emit("BLIND_OPTIONS", {
+function Hooks.on_blind_skipped(e, tags_before_count)
+    if not (G and G.GAME) then return end
+    tags_before_count = tags_before_count or 0
+    -- collect tags that were added by this skip (may be >1 with Double Tag)
+    local new_tags = {}
+    if G.tags then
+        for i = tags_before_count + 1, #G.tags do
+            local t = G.tags[i]
+            table.insert(new_tags, t.key or (t.config and t.config.type) or "unknown")
+        end
+    end
+    rec.emit("BLIND_SKIPPED", {
         state_before = snap.compact(),
-        action       = { skipped = true },
-        resolution   = { tag_earned = nil },  -- tag is computed post-skip
-        state_after  = {},
+        action       = { blind_key = G.GAME.blind_on_deck },
+        resolution   = { tags_earned = new_tags },
+        state_after  = snap.compact(),
     })
 end
 

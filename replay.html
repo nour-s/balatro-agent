@@ -585,6 +585,7 @@ const EVENT_COLORS = {
   JOKER_GRAPH:       '#bfc7d5',
   STATE_CHANGE:      '#6b7f8a',
   BLIND_OPTIONS:     '#f3b958',
+  BLIND_SKIPPED:     '#a78bfa',
   BOSS_BLIND_ACTIVE: '#fe5f55',
   BOSS_REROLL:       '#fe5f55',
   ROUND_START:       '#4bc292',
@@ -851,6 +852,25 @@ function renderEvent(ev) {
       p.appendChild(row);
       if (act.boss_reroll_available || res.boss_reroll_available) {
         p.appendChild(small('Boss reroll available (cost: '+(act.boss_reroll_cost||res.boss_reroll_cost||0)+')', 'var(--money)'));
+      }
+      body.appendChild(p);
+      break;
+    }
+
+    case 'BLIND_SKIPPED': {
+      const tags = res.tags_earned || act.tags_earned || [];
+      const p = panel(`Blind Skipped — ${act.blind_key || res.blind_key || '?'}`, []);
+      if (tags.length) {
+        const row = document.createElement('div'); row.style.cssText='display:flex;flex-wrap:wrap;gap:5px;margin-top:4px;';
+        for (const tag of tags) {
+          const span = document.createElement('span');
+          span.style.cssText='font-size:0.72rem;padding:3px 10px;border-radius:3px;border:1px solid var(--money);background:rgba(243,185,88,.15);color:var(--money);font-weight:bold;';
+          span.textContent = '🏷 ' + tag.replace(/^tag_/,'');
+          row.appendChild(span);
+        }
+        p.appendChild(row);
+      } else {
+        p.appendChild(small('No tags earned', 'var(--dim)'));
       }
       body.appendChild(p);
       break;

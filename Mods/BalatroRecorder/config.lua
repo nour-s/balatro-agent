@@ -13,6 +13,7 @@ return {
         RNG_CALL           = false,  -- very verbose; enable only for replay analysis
         STATE_CHANGE       = true,
         BLIND_OPTIONS      = true,
+        BLIND_SKIPPED      = true,
         BOSS_BLIND_ACTIVE  = true,
         BOSS_REROLL        = true,
         ROUND_START        = true,
