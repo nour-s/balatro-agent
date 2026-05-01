@@ -1,0 +1,45 @@
+Mods/BalatroRecorder/lovely/init.toml
+  4bf22c338421d1e6 1-85
+Mods/BalatroRecorder/hooks.lua
+  4bf22c338421d1e6 1-586
+Mods/BalatroRecorder/encoder.lua
+  4bf22c338421d1e6 1-189
+Mods/BalatroRecorder/snapshot.lua
+  4bf22c338421d1e6 1-96
+Mods/BalatroRecorder/init.lua
+  4bf22c338421d1e6 1-306
+.gitignore
+  4bf22c338421d1e6 1-19
+CLAUDE.md
+  4bf22c338421d1e6 1-25
+replay.html
+  4bf22c338421d1e6 1-1254
+Mods/BalatroRecorder/config.lua
+  4bf22c338421d1e6 1-38
+test/simulate.js
+  4bf22c338421d1e6 1-496
+Mods/BalatroRecorder/dkjson.lua
+  4bf22c338421d1e6 1-714
+Mods/BalatroRecorder/recorder.lua
+  4bf22c338421d1e6 1-168
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "80d2b4c3bfd659a451fa2c56fbe8eb914377b47d",
+  "prompts": {
+    "4bf22c338421d1e6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c7ffbfa0-e15b-4a77-96db-1992d7485caf",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "Nour Sabouny",
+      "messages": [],
+      "total_additions": 3976,
+      "total_deletions": 0,
+      "accepted_lines": 3976,
+      "overriden_lines": 0
+    }
+  }
+}
