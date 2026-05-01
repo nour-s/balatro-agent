@@ -1,0 +1,19 @@
+# Generated test data
+test/*.jsonl
+
+# Screenshot artifacts
+*.png
+
+# Playwright
+.playwright-mcp/
+
+# Claude Code
+.claude/
+
+# Unrelated projects / binaries
+balatro-mobile-maker/
+balatro.apk
+Balatro.exe
+7zip.tar.xz
+UNTESTED-*
+pr-plan.md

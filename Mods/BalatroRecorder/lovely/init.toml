@@ -1,0 +1,85 @@
+# BalatroRecorder — Lovely Injector patch definitions
+# All patches reference files inside this mod's directory.
+
+[manifest]
+version = "1.0.0"
+id = "BalatroRecorder"
+name = "Balatro Recorder"
+
+# ── Load modules before main.lua ──────────────────────────────
+
+[[patches]]
+[patches.module]
+source = "dkjson.lua"
+before = "main.lua"
+name   = "dkjson"
+
+[[patches]]
+[patches.module]
+source = "config.lua"
+before = "main.lua"
+name   = "brec_config"
+
+[[patches]]
+[patches.module]
+source = "encoder.lua"
+before = "main.lua"
+name   = "encoder"
+
+[[patches]]
+[patches.module]
+source = "recorder.lua"
+before = "main.lua"
+name   = "recorder"
+
+[[patches]]
+[patches.module]
+source = "snapshot.lua"
+before = "main.lua"
+name   = "snapshot"
+
+[[patches]]
+[patches.module]
+source = "hooks.lua"
+before = "main.lua"
+name   = "hooks"
+
+[[patches]]
+[patches.module]
+source = "init.lua"
+before = "main.lua"
+name   = "brec_init"
+
+# ── Startup hook: wrap game functions after G:start_up() ──────
+
+[[patches]]
+[patches.pattern]
+target = "main.lua"
+pattern = "G:start_up()"
+position = "after"
+payload = '''
+local _brec_ok, _brec = pcall(require, "brec_init")
+if _brec_ok and _brec then
+    local _ok2, _err = pcall(_brec.startup)
+    if not _ok2 then print("[BalatroRecorder] startup error: " .. tostring(_err)) end
+end
+'''
+match_indent = true
+times = 1
+
+# ── Frame update hook: state machine and pending events ───────
+
+[[patches]]
+[patches.pattern]
+target = "main.lua"
+pattern = "G:update(dt)"
+position = "after"
+payload = '''
+local _brec_ok, _brec = pcall(require, "brec_init")
+if _brec_ok and _brec then
+    local _ok2, _err = pcall(_brec.update)
+    if not _ok2 then print("[BalatroRecorder] update error: " .. tostring(_err)) end
+end
+'''
+match_indent = true
+times = 1

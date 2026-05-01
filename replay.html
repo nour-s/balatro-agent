@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Balatro Replay Viewer</title>
+<style>
+  :root {
+    --bg:       #1a1f23;
+    --surface:  #252c31;
+    --panel:    #2e373c;
+    --border:   #3d4d55;
+    --text:     #c8d8e0;
+    --dim:      #6b7f8a;
+    --chips:    #009dff;
+    --mult:     #fe5f55;
+    --money:    #f3b958;
+    --green:    #4bc292;
+    --joker:    #bfc7d5;
+    --purple:   #a78bfa;
+    --red:      #fe5f55;
+    --black:    #1a1f23;
+    --white:    #e8f0f5;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Courier New', Courier, monospace;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Top bar ── */
+  #topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  #logo {
+    font-size: 1.1rem;
+    font-weight: bold;
+    letter-spacing: 2px;
+    color: var(--money);
+    text-transform: uppercase;
+  }
+
+  #file-label {
+    cursor: pointer;
+    padding: 4px 12px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    font-size: 0.75rem;
+    color: var(--dim);
+    transition: border-color 0.15s;
+  }
+  #file-label:hover { border-color: var(--money); color: var(--money); }
+  #file-input { display: none; }
+
+  #run-info {
+    font-size: 0.7rem;
+    color: var(--dim);
+    margin-left: 4px;
+  }
+  #run-info span { color: var(--money); }
+
+  #counter {
+    margin-left: auto;
+    font-size: 0.75rem;
+    color: var(--dim);
+  }
+
+  /* ── Main layout ── */
+  #main {
+    display: grid;
+    grid-template-columns: 200px 1fr 200px;
+    gap: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar panels ── */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .sidebar:last-child { border-right: none; border-left: 1px solid var(--border); }
+
+  .sidebar-title {
+    font-size: 0.6rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--dim);
+    padding: 8px 10px 4px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .sidebar-body {
+    overflow-y: auto;
+    padding: 8px;
+    flex: 1;
+  }
+
+  /* ── Center area ── */
+  #center {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Event header ── */
+  #event-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    background: var(--surface);
+  }
+
+  .event-badge {
+    font-size: 0.65rem;
+    letter-spacing: 1px;
+    padding: 3px 8px;
+    border-radius: 2px;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+
+  #seq-num {
+    font-size: 0.7rem;
+    color: var(--dim);
+  }
+
+  #event-ts {
+    font-size: 0.65rem;
+    color: var(--dim);
+    margin-left: auto;
+  }
+
+  /* ── Event body ── */
+  #event-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* ── State panels (before/after) ── */
+  .state-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 10px;
+  }
+
+  .panel-title {
+    font-size: 0.58rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 4px;
+  }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 2px 8px;
+    font-size: 0.72rem;
+  }
+
+  .stat-key { color: var(--dim); }
+  .stat-val { color: var(--text); font-weight: bold; }
+  .stat-val.chips  { color: var(--chips); }
+  .stat-val.mult   { color: var(--mult);  }
+  .stat-val.money  { color: var(--money); }
+  .stat-val.green  { color: var(--green); }
+  .stat-val.joker  { color: var(--joker); }
+
+  /* ── Action / Resolution panel ── */
+  .action-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 10px;
+  }
+
+  /* ── Cards row ── */
+  .cards-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 4px;
+  }
+
+  .card {
+    width: 36px;
+    height: 50px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: bold;
+    position: relative;
+    flex-shrink: 0;
+    cursor: default;
+    transition: transform 0.1s;
+  }
+  .card:hover { transform: translateY(-3px); }
+
+  .card.red  { background: #fff; color: #c0392b; border-color: #c0392b; }
+  .card.black{ background: #fff; color: #1a1f23; border-color: #4a5568; }
+  .card.foil { background: linear-gradient(135deg,#d4e8ff,#f0f8ff,#e0d0ff); }
+  .card.holo { background: linear-gradient(135deg,#ffe0e0,#fff0e0,#e0ffe0,#e0e0ff); }
+  .card.polychrome { background: linear-gradient(135deg,#ffcccc,#ffe4cc,#fffacc,#ccffcc,#ccf0ff,#e4ccff); }
+
+  .card-rank { font-size: 0.9rem; line-height: 1; }
+  .card-suit { font-size: 0.75rem; line-height: 1; }
+  .card-mod  { font-size: 0.5rem; color: var(--money); position: absolute; bottom: 2px; right: 2px; }
+
+  /* ── Joker chain pipeline ── */
+  .joker-chain {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    margin-top: 4px;
+  }
+
+  .joker-step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 0.65rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 70px;
+  }
+  .joker-step .j-name { color: var(--joker); font-size: 0.6rem; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 90px; }
+  .joker-step .j-delta { display: flex; flex-wrap: wrap; gap: 3px; }
+  .j-chips  { color: var(--chips);  font-size: 0.6rem; }
+  .j-mult   { color: var(--mult);   font-size: 0.6rem; }
+  .j-xmult  { color: var(--purple); font-size: 0.6rem; }
+
+  .chain-arrow {
+    color: var(--dim);
+    font-size: 0.7rem;
+  }
+
+  .score-result {
+    display: flex;
+    gap: 12px;
+    margin-top: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .score-box {
+    padding: 3px 10px;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    font-weight: bold;
+  }
+  .score-box.chips-box { background: #004a7a; color: var(--chips); border: 1px solid var(--chips); }
+  .score-box.mult-box  { background: #7a1511; color: var(--mult);  border: 1px solid var(--mult);  }
+  .score-box.score-box-total { background: #006040; color: var(--green); border: 1px solid var(--green); font-size: 0.85rem; }
+
+  /* ── Shop inventory ── */
+  .shop-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .shop-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 5px 8px;
+    font-size: 0.65rem;
+    min-width: 90px;
+    max-width: 120px;
+  }
+  .shop-item .si-slot  { color: var(--dim); font-size: 0.55rem; }
+  .shop-item .si-name  { color: var(--joker); margin: 2px 0; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .shop-item .si-cost  { color: var(--money); }
+  .shop-item .si-edition { color: var(--purple); font-size: 0.6rem; }
+
+  /* ── Joker list ── */
+  .joker-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 0;
+    font-size: 0.68rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .joker-item:last-child { border-bottom: none; }
+  .joker-pos { color: var(--dim); width: 14px; text-align: right; flex-shrink: 0; }
+  .joker-name { color: var(--joker); font-weight: bold; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .joker-edition { color: var(--purple); font-size: 0.6rem; }
+  .joker-copies { color: var(--green); font-size: 0.6rem; }
+
+  /* ── Consumable list ── */
+  .consumable-item {
+    font-size: 0.68rem;
+    padding: 2px 0;
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
+  }
+  .consumable-item:last-child { border-bottom: none; }
+
+  /* ── Deck chips ── */
+  .deck-chip {
+    display: inline-block;
+    font-size: 0.6rem;
+    padding: 1px 4px;
+    border-radius: 2px;
+    margin: 1px;
+    border: 1px solid var(--border);
+  }
+  .deck-chip.red   { color: var(--red);  border-color: var(--red);  background: rgba(254,95,85,.1); }
+  .deck-chip.black { color: var(--dim);  }
+
+  /* ── Raw JSON ── */
+  details.raw-json {
+    margin-top: 4px;
+  }
+  details.raw-json summary {
+    font-size: 0.6rem;
+    color: var(--dim);
+    cursor: pointer;
+    user-select: none;
+  }
+  details.raw-json summary:hover { color: var(--text); }
+  pre.raw {
+    font-size: 0.6rem;
+    color: var(--dim);
+    overflow-x: auto;
+    padding: 6px;
+    background: var(--bg);
+    border-radius: 3px;
+    margin-top: 4px;
+    max-height: 150px;
+    overflow-y: auto;
+  }
+
+  /* ── Navigation bar ── */
+  #navbar {
+    padding: 8px 16px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+
+  .nav-btn {
+    padding: 5px 18px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .nav-btn:hover:not(:disabled) { border-color: var(--money); color: var(--money); }
+  .nav-btn:disabled { opacity: 0.3; cursor: default; }
+
+  /* ── Timeline strip ── */
+  #timeline {
+    flex: 1;
+    overflow-x: auto;
+    display: flex;
+    gap: 2px;
+    align-items: center;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .tl-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    flex-shrink: 0;
+    cursor: pointer;
+    opacity: 0.4;
+    transition: opacity 0.1s, transform 0.1s;
+  }
+  .tl-dot:hover { opacity: 0.8; transform: scaleY(1.3); }
+  .tl-dot.active { opacity: 1; transform: scaleY(1.6); }
+
+  /* ── Drop overlay ── */
+  #drop-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(26,31,35,.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    flex-direction: column;
+    gap: 16px;
+  }
+  #drop-overlay.hidden { display: none; }
+
+  .drop-box {
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    padding: 48px 64px;
+    text-align: center;
+    transition: border-color 0.15s;
+  }
+  .drop-box.drag-over { border-color: var(--money); }
+
+  .drop-title { font-size: 1.3rem; color: var(--money); letter-spacing: 2px; margin-bottom: 8px; }
+  .drop-sub   { font-size: 0.75rem; color: var(--dim); }
+
+  .or-sep { color: var(--dim); font-size: 0.7rem; }
+
+  .pick-btn {
+    padding: 7px 22px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .pick-btn:hover { border-color: var(--money); color: var(--money); }
+
+  /* ── Empty state ── */
+  #empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    color: var(--dim);
+    font-size: 0.8rem;
+  }
+
+  /* ── Scrollbars ── */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ── Money delta pill ── */
+  .money-pill {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: bold;
+    padding: 2px 7px;
+    border-radius: 10px;
+    margin-right: 4px;
+  }
+  .money-pill.pos { background: rgba(75,194,146,.2); color: var(--green); }
+  .money-pill.neg { background: rgba(254,95,85,.2);  color: var(--mult);  }
+
+  .blind-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+  }
+  .blind-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 5px 8px;
+    font-size: 0.65rem;
+    min-width: 100px;
+  }
+  .blind-card .bc-type { color: var(--dim); font-size: 0.55rem; letter-spacing: 1px; text-transform: uppercase; }
+  .blind-card .bc-key  { color: var(--text); font-weight: bold; margin: 2px 0; }
+  .blind-card .bc-chips{ color: var(--chips); }
+  .blind-card .bc-tag  { color: var(--money); font-size: 0.6rem; }
+</style>
+</head>
+<body>
+
+<!-- Drop overlay -->
+<div id="drop-overlay">
+  <div class="drop-box" id="drop-box">
+    <div class="drop-title">BALATRO REPLAY</div>
+    <div class="drop-sub">Drop a .jsonl recording here</div>
+  </div>
+  <div class="or-sep">— or —</div>
+  <label class="pick-btn" for="file-input-overlay">Browse file…</label>
+  <input type="file" id="file-input-overlay" accept=".jsonl,.txt" style="display:none">
+</div>
+
+<!-- Top bar -->
+<div id="topbar">
+  <div id="logo">♦ Replay</div>
+  <label class="file-label" for="file-input" id="file-label">Load .jsonl ▸</label>
+  <input type="file" id="file-input" accept=".jsonl,.txt">
+  <div id="run-info"></div>
+  <div id="counter"></div>
+</div>
+
+<!-- Main -->
+<div id="main">
+  <!-- Left: State Before -->
+  <div class="sidebar" id="sb-before">
+    <div class="sidebar-title">State Before</div>
+    <div class="sidebar-body" id="sb-before-body"></div>
+  </div>
+
+  <!-- Center -->
+  <div id="center">
+    <div id="event-header">
+      <span id="event-badge" class="event-badge"></span>
+      <span id="seq-num"></span>
+      <span id="event-ts"></span>
+    </div>
+    <div id="event-body">
+      <div id="empty">Load a .jsonl file to begin</div>
+    </div>
+    <div id="navbar">
+      <button class="nav-btn" id="btn-first">|◀</button>
+      <button class="nav-btn" id="btn-prev">◀ Prev</button>
+      <div id="timeline"></div>
+      <button class="nav-btn" id="btn-next">Next ▶</button>
+      <button class="nav-btn" id="btn-last">▶|</button>
+    </div>
+  </div>
+
+  <!-- Right: State After -->
+  <div class="sidebar" id="sb-after">
+    <div class="sidebar-title">State After</div>
+    <div class="sidebar-body" id="sb-after-body"></div>
+  </div>
+</div>
+
+<script>
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+const SUIT_SYM  = { S:'♠', H:'♥', D:'♦', C:'♣', Spades:'♠', Hearts:'♥', Diamonds:'♦', Clubs:'♣' };
+const SUIT_RED  = { H:1, D:1, Hearts:1, Diamonds:1, '♥':1, '♦':1 };
+const STATE_NAMES = {
+  1:'SELECTING_HAND', 2:'HAND_PLAYED', 3:'DRAW_TO_HAND', 4:'GAME_OVER',
+  5:'SHOP', 6:'ROUND_EVAL', 7:'BLIND_SELECT', 8:'TAROT_PACK', 9:'PLANET_PACK',
+  10:'SPECTRAL_PACK', 11:'BUFFOON_PACK', 12:'STANDARD_PACK', 19:'NEW_ROUND',
+  20:'MENU',
+};
+
+const EVENT_COLORS = {
+  RUN_START:         '#4bc292',
+  DECK_SNAPSHOT:     '#4bc292',
+  JOKER_GRAPH:       '#bfc7d5',
+  STATE_CHANGE:      '#6b7f8a',
+  BLIND_OPTIONS:     '#f3b958',
+  BOSS_BLIND_ACTIVE: '#fe5f55',
+  BOSS_REROLL:       '#fe5f55',
+  ROUND_START:       '#4bc292',
+  HAND_PLAYED:       '#009dff',
+  HAND_RESOLUTION:   '#009dff',
+  CARDS_DISCARDED:   '#a78bfa',
+  ROUND_RESOURCES:   '#6b7f8a',
+  ROUND_WON:         '#4bc292',
+  ROUND_LOST:        '#fe5f55',
+  SHOP_INVENTORY:    '#f3b958',
+  SHOP_BUY:          '#f3b958',
+  SHOP_SELL:         '#f3b958',
+  SHOP_REROLL:       '#f3b958',
+  PACK_OPENED:       '#a78bfa',
+  CONSUMABLE_USED:   '#a78bfa',
+  CONSUMABLE_SNAPSHOT:'#a78bfa',
+  DECK_CHANGE:       '#bfc7d5',
+  MONEY_CHANGE:      '#f3b958',
+  GAME_WIN:          '#4bc292',
+  GAME_OVER:         '#fe5f55',
+  RNG_CALL:          '#3d4d55',
+};
+
+function suitSym(s) { return SUIT_SYM[s] || s || '?'; }
+function isRed(s)   { return !!SUIT_RED[s]; }
+
+function rankShort(v) {
+  if (!v) return '?';
+  const m = {'10':'T','Jack':'J','Queen':'Q','King':'K','Ace':'A'};
+  return m[v] || v;
+}
+
+function cardEl(c) {
+  if (typeof c === 'string') {
+    // short notation like "AS[foil]"
+    const div = document.createElement('div');
+    div.className = 'card ' + (/[♥♦H D]/.test(c) || c.match(/^[^A-Z]*[HD]/) ? 'red' : 'black');
+    const rank = c.slice(0,1);
+    const suit = c.slice(1,2);
+    const mods = c.slice(2);
+    div.innerHTML = `<span class="card-rank">${rank}</span><span class="card-suit">${suitSym(suit)}</span>`;
+    if (mods) { const m = document.createElement('span'); m.className='card-mod'; m.textContent=mods; div.appendChild(m); }
+    return div;
+  }
+  const div = document.createElement('div');
+  const suit = c.suit || '';
+  const red = isRed(suit);
+  let cls = 'card ' + (red ? 'red' : 'black');
+  if (c.edition === 'foil') cls += ' foil';
+  else if (c.edition === 'holographic' || c.edition === 'holo') cls += ' holo';
+  else if (c.edition === 'polychrome') cls += ' polychrome';
+  div.className = cls;
+  const sym = suitSym(suit);
+  div.innerHTML = `<span class="card-rank">${rankShort(c.value||c.rank)}</span><span class="card-suit">${sym}</span>`;
+  const mods = [];
+  if (c.enhancement) mods.push(c.enhancement.slice(0,3));
+  if (c.seal) mods.push(c.seal.slice(0,1)+'s');
+  if (mods.length) { const m = document.createElement('span'); m.className='card-mod'; m.textContent=mods.join(' '); div.appendChild(m); }
+  return div;
+}
+
+function statGrid(obj) {
+  if (!obj || !Object.keys(obj).length) return null;
+  const grid = document.createElement('div');
+  grid.className = 'stat-grid';
+  for (const [k, v] of Object.entries(obj)) {
+    const kEl = document.createElement('div'); kEl.className = 'stat-key'; kEl.textContent = k;
+    const vEl = document.createElement('div'); vEl.className = 'stat-val';
+    if (k === 'chips_scored' || k === 'chips_needed') vEl.classList.add('chips');
+    else if (k === 'dollars' || k === 'money') vEl.classList.add('money');
+    else if (k === 'hands_left') vEl.classList.add('green');
+    else if (k === 'joker_count') vEl.classList.add('joker');
+    vEl.textContent = v == null ? '—' : String(v);
+    grid.appendChild(kEl);
+    grid.appendChild(vEl);
+  }
+  return grid;
+}
+
+function statePanel(state, label) {
+  const div = document.createElement('div');
+  div.className = 'panel';
+  const t = document.createElement('div'); t.className='panel-title'; t.textContent = label;
+  div.appendChild(t);
+  if (!state || !Object.keys(state).length) {
+    const e = document.createElement('div'); e.style.color='var(--dim)'; e.style.fontSize='0.7rem'; e.textContent='—';
+    div.appendChild(e);
+  } else {
+    const g = statGrid(state);
+    if (g) div.appendChild(g);
+  }
+  return div;
+}
+
+function panel(title, children) {
+  const div = document.createElement('div');
+  div.className = 'action-panel';
+  const t = document.createElement('div'); t.className='panel-title'; t.textContent=title;
+  div.appendChild(t);
+  for (const c of (Array.isArray(children) ? children : [children])) {
+    if (c) div.appendChild(c);
+  }
+  return div;
+}
+
+function cardsRow(cards) {
+  if (!cards || !cards.length) return null;
+  const row = document.createElement('div'); row.className='cards-row';
+  for (const c of cards) row.appendChild(cardEl(c));
+  return row;
+}
+
+function txt(s, cls) {
+  const el = document.createElement('div');
+  if (cls) el.className = cls;
+  el.textContent = s;
+  el.style.fontSize = '0.72rem';
+  return el;
+}
+
+function small(s, color) {
+  const el = document.createElement('div');
+  el.style.fontSize = '0.65rem';
+  el.style.color = color || 'var(--dim)';
+  el.textContent = s;
+  return el;
+}
+
+function rawJSON(ev) {
+  const d = document.createElement('details');
+  d.className = 'raw-json';
+  const s = document.createElement('summary'); s.textContent = 'Raw JSON';
+  const pre = document.createElement('pre'); pre.className='raw';
+  pre.textContent = JSON.stringify(ev, null, 2);
+  d.appendChild(s); d.appendChild(pre);
+  return d;
+}
+
+// ─── State sidebar renderer ─────────────────────────────────────────────────
+
+function renderStateSidebar(state, container) {
+  container.innerHTML = '';
+  if (!state || !Object.keys(state).length) {
+    container.innerHTML = '<div style="color:var(--dim);font-size:0.68rem;">—</div>';
+    return;
+  }
+
+  const simple = {};
+  for (const [k,v] of Object.entries(state)) {
+    if (typeof v !== 'object' || v == null) simple[k] = v;
+  }
+  const g = statGrid(simple);
+  if (g) container.appendChild(g);
+
+  // jokers sub-list
+  if (state.jokers && Array.isArray(state.jokers)) {
+    const t = document.createElement('div'); t.className='sidebar-title'; t.style.margin='8px -8px 4px'; t.textContent='Jokers';
+    container.appendChild(t);
+    for (const j of state.jokers) {
+      const ji = document.createElement('div'); ji.className='joker-item';
+      const pos = document.createElement('span'); pos.className='joker-pos'; pos.textContent=(j.pos??'')+'.';
+      const name = document.createElement('span'); name.className='joker-name'; name.textContent=j.key||j.name||'?';
+      ji.appendChild(pos); ji.appendChild(name);
+      if (j.edition) { const e=document.createElement('span'); e.className='joker-edition'; e.textContent=j.edition; ji.appendChild(e); }
+      if (j.copies_pos!=null) { const c=document.createElement('span'); c.className='joker-copies'; c.textContent='→'+j.copies_pos; ji.appendChild(c); }
+      container.appendChild(ji);
+    }
+  }
+
+  // consumables
+  if (state.consumables && Array.isArray(state.consumables)) {
+    const t = document.createElement('div'); t.className='sidebar-title'; t.style.margin='8px -8px 4px'; t.textContent='Consumables';
+    container.appendChild(t);
+    for (const c of state.consumables) {
+      const ci = document.createElement('div'); ci.className='consumable-item';
+      ci.textContent = c.key || c.name || JSON.stringify(c);
+      container.appendChild(ci);
+    }
+  }
+
+  // deck list (compact chips)
+  if (state.cards && Array.isArray(state.cards)) {
+    const t = document.createElement('div'); t.className='sidebar-title'; t.style.margin='8px -8px 4px'; t.textContent='Deck';
+    container.appendChild(t);
+    const wrap = document.createElement('div'); wrap.style.display='flex'; wrap.style.flexWrap='wrap';
+    for (const c of state.cards) {
+      const chip = document.createElement('span'); chip.className='deck-chip ';
+      const suit = c.suit||'';
+      chip.classList.add(isRed(suit)?'red':'black');
+      chip.textContent = rankShort(c.value||c.rank) + (suitSym(suit)||'');
+      wrap.appendChild(chip);
+    }
+    container.appendChild(wrap);
+  }
+}
+
+// ─── Main event renderer ────────────────────────────────────────────────────
+
+function renderEvent(ev) {
+  const body = document.getElementById('event-body');
+  body.innerHTML = '';
+
+  const act = ev.action || {};
+  const res = ev.resolution || {};
+
+  switch (ev.event) {
+
+    case 'RUN_START': {
+      const p = panel('Run Started', [
+        statGrid({ seed: act.seed, deck: act.deck_key, stake: act.stake, challenge: act.challenge||'none' })
+      ]);
+      body.appendChild(p);
+      break;
+    }
+
+    case 'DECK_SNAPSHOT': {
+      const cards = res.cards || act.cards || [];
+      const p = panel(`Deck Snapshot (${cards.length} cards)`, [ cardsRow(cards) ]);
+      body.appendChild(p);
+      break;
+    }
+
+    case 'JOKER_GRAPH': {
+      const jokers = res.jokers || act.jokers || [];
+      const p = panel(`Joker Graph — ${res.trigger||act.trigger||''}`, []);
+      for (const j of jokers) {
+        const ji = document.createElement('div'); ji.className='joker-item';
+        const pos = document.createElement('span'); pos.className='joker-pos'; pos.textContent=j.pos+'.';
+        const name = document.createElement('span'); name.className='joker-name'; name.textContent=j.key||j.name||'?';
+        ji.appendChild(pos); ji.appendChild(name);
+        if (j.edition) { const e=document.createElement('span'); e.className='joker-edition'; e.textContent=j.edition; ji.appendChild(e); }
+        if (j.copies_pos!=null) { const c=document.createElement('span'); c.className='joker-copies'; c.textContent='copies pos '+j.copies_pos; ji.appendChild(c); }
+        p.appendChild(ji);
+      }
+      body.appendChild(p);
+      break;
+    }
+
+    case 'STATE_CHANGE': {
+      const fromName = STATE_NAMES[act.from_id||res.from_id] || act.from || res.from || '?';
+      const toName   = STATE_NAMES[act.to_id||res.to_id]   || act.to   || res.to   || '?';
+      const p = panel('State Transition', [
+        txt(`${fromName}  →  ${toName}`, '')
+      ]);
+      p.querySelector('.panel-title').nextSibling && null;
+      p.querySelector('div:last-child').style.color='var(--text)';
+      p.querySelector('div:last-child').style.fontSize='0.85rem';
+      body.appendChild(p);
+      break;
+    }
+
+    case 'BLIND_OPTIONS': {
+      const p = panel(`Blind Options — Ante ${act.ante||res.ante||'?'}`, []);
+      const row = document.createElement('div'); row.className='blind-row';
+      for (const [type, blind] of [['Small', act.small||res.small], ['Big', act.big||res.big], ['Boss', act.boss||res.boss]]) {
+        if (!blind) continue;
+        const bc = document.createElement('div'); bc.className='blind-card';
+        bc.innerHTML = `<div class="bc-type">${type}</div><div class="bc-key">${blind.key||'?'}</div><div class="bc-chips">⬡ ${blind.chips||'?'}</div>`;
+        if (blind.tag_if_skipped) {
+          const tag = document.createElement('div'); tag.className='bc-tag'; tag.textContent='skip→'+blind.tag_if_skipped; bc.appendChild(tag);
+        }
+        row.appendChild(bc);
+      }
+      p.appendChild(row);
+      if (act.boss_reroll_available || res.boss_reroll_available) {
+        p.appendChild(small('Boss reroll available (cost: '+(act.boss_reroll_cost||res.boss_reroll_cost||0)+')', 'var(--money)'));
+      }
+      body.appendChild(p);
+      break;
+    }
+
+    case 'BOSS_BLIND_ACTIVE': {
+      const p = panel('Boss Blind Active', [
+        statGrid({ key: res.key||act.key, effect: res.effect_type||act.effect_type, trigger: res.trigger||act.trigger })
+      ]);
+      body.appendChild(p);
+      break;
+    }
+
+    case 'ROUND_START': {
+      const p = panel('Round Start', [
+        statGrid({ ante: res.ante||act.ante, round: res.round||act.round, blind_key: res.blind_key||act.blind_key, chips_needed: res.chips_needed||act.chips_needed })
+      ]);
+      body.appendChild(p);
+      break;
+    }
+
+    case 'HAND_PLAYED': {
+      const cards = act.cards || [];
+      const p = panel('Cards Played', [ cardsRow(cards) ]);
+      body.appendChild(p);
+      break;
+    }
+
+    case 'HAND_RESOLUTION': {
+      const chain = res.joker_chain || res.scoring_chain || [];
+      const base  = res.base || {};
+      const final = res.final || {};
+      const score = final.score || res.score;
+      const chips  = final.chips || res.chips;
+      const mult   = final.mult  || res.mult;
+      const xmult  = final.xmult;
+
+      // Base + chain visualization
+      const chainDiv = document.createElement('div');
+      chainDiv.className = 'joker-chain';
+
+      // Base node
+      const baseNode = document.createElement('div');
+      baseNode.className = 'joker-step';
+      const hn = document.createElement('div'); hn.className='j-name'; hn.textContent = res.hand_type || '?';
+      const bd = document.createElement('div'); bd.className='j-delta';
+      if (base.chips) { const s=document.createElement('span'); s.className='j-chips'; s.textContent='+'+base.chips+'⬡'; bd.appendChild(s); }
+      if (base.mult)  { const s=document.createElement('span'); s.className='j-mult';  s.textContent='×'+base.mult+'✦'; bd.appendChild(s); }
+      baseNode.appendChild(hn); baseNode.appendChild(bd);
+      chainDiv.appendChild(baseNode);
+
+      // Card effects
+      const cardEff = res.card_effects || [];
+      for (const ce of cardEff) {
+        const arrow = document.createElement('span'); arrow.className='chain-arrow'; arrow.textContent='▶'; chainDiv.appendChild(arrow);
+        const node = document.createElement('div'); node.className='joker-step';
+        const name = document.createElement('div'); name.className='j-name'; name.textContent=ce.card||'card';
+        const delta = document.createElement('div'); delta.className='j-delta';
+        if (ce.chips) { const s=document.createElement('span'); s.className='j-chips'; s.textContent='+'+ce.chips+'⬡'; delta.appendChild(s); }
+        if (ce.mult)  { const s=document.createElement('span'); s.className='j-mult';  s.textContent='+'+ce.mult+'✦'; delta.appendChild(s); }
+        node.appendChild(name); node.appendChild(delta); chainDiv.appendChild(node);
+      }
+
+      // Joker chain
+      for (const step of chain) {
+        const arrow = document.createElement('span'); arrow.className='chain-arrow'; arrow.textContent='▶'; chainDiv.appendChild(arrow);
+        const node = document.createElement('div'); node.className='joker-step';
+        const name = document.createElement('div'); name.className='j-name';
+        name.textContent = (step.source||step.joker||step.key||'?').replace('j_','');
+        const delta = document.createElement('div'); delta.className='j-delta';
+        if (step.chips_delta||step.chips) { const s=document.createElement('span'); s.className='j-chips'; s.textContent='+'+(step.chips_delta||step.chips)+'⬡'; delta.appendChild(s); }
+        if (step.mult_delta||step.mult)   { const s=document.createElement('span'); s.className='j-mult';  s.textContent='+'+(step.mult_delta||step.mult)+'✦'; delta.appendChild(s); }
+        if (step.xmult||step.Xmult)       { const s=document.createElement('span'); s.className='j-xmult'; s.textContent='×'+(step.xmult||step.Xmult)+'✧'; delta.appendChild(s); }
+        if (step.copies) { const s=document.createElement('span'); s.className='j-xmult'; s.textContent='copy:'+step.copies; delta.appendChild(s); }
+        node.appendChild(name); node.appendChild(delta);
+        chainDiv.appendChild(node);
+      }
+
+      // Score row
+      const scoreRow = document.createElement('div'); scoreRow.className='score-result';
+      if (chips!=null) { const b=document.createElement('div'); b.className='score-box chips-box'; b.textContent=chips+' ⬡'; scoreRow.appendChild(b); }
+      if (mult!=null)  { const b=document.createElement('div'); b.className='score-box mult-box';  b.textContent='× '+mult; scoreRow.appendChild(b); }
+      if (xmult)       { const b=document.createElement('div'); b.className='score-box mult-box';  b.textContent='× '+xmult+' ✧'; scoreRow.appendChild(b); }
+      if (score!=null) { const b=document.createElement('div'); b.className='score-box score-box-total'; b.textContent='= '+score.toLocaleString(); scoreRow.appendChild(b); }
+
+      const p = panel(`Hand Resolution — ${res.hand_type||'?'}`, [ chainDiv, scoreRow ]);
+      body.appendChild(p);
+      break;
+    }
+
+    case 'CARDS_DISCARDED': {
+      const cards = act.cards || [];
+      const p = panel('Cards Discarded', [ cardsRow(cards) ]);
+      body.appendChild(p);
+      break;
+    }
+
+    case 'ROUND_RESOURCES': {
+      const p = panel('Round Resources', [
+        statGrid({ hands: res.hands_remaining??act.hands_remaining, discards: res.discards_remaining??act.discards_remaining, trigger: res.trigger||act.trigger })
+      ]);
+      body.appendChild(p);
+      break;
+    }
+
+    case 'ROUND_WON': {
+      const p = panel('Round Won ✓', [
+        statGrid({ chips_scored: res.chips_scored||act.chips_scored, chips_needed: res.chips_needed||act.chips_needed })
+      ]);
+      body.appendChild(p);
+      break;
+    }
+
+    case 'ROUND_LOST': {
+      const p = panel('Round Lost ✗', [
+        statGrid({ chips_scored: res.chips_scored||act.chips_scored, chips_needed: res.chips_needed||act.chips_needed })
+      ]);
+      body.appendChild(p);
+      break;
+    }
+
+    case 'SHOP_INVENTORY': {
+      const slots = res.slots || act.slots || [];
+      const p = panel(`Shop Inventory — reroll #${res.reroll_number??act.reroll_number??0}  (reroll cost: $${res.reroll_cost??act.reroll_cost??'?'})`, []);
+      const grid = document.createElement('div'); grid.className='shop-grid';
+      for (const s of slots) {
+        const si = document.createElement('div'); si.className='shop-item';
+        si.innerHTML = `<div class="si-slot">${s.slot||''}</div><div class="si-name">${(s.key||s.name||'?').replace(/^[jpvc]_/,'')}</div><div class="si-cost">$${s.cost||'?'}</div>`;
+        if (s.edition) { const e=document.createElement('div'); e.className='si-edition'; e.textContent=s.edition; si.appendChild(e); }
+        grid.appendChild(si);
+      }
+      p.appendChild(grid);
+      body.appendChild(p);
+      break;
+    }
+
+    case 'SHOP_BUY': {
+      const item = act.item || res.item || {};
+      const p = panel('Shop Buy', [
+        statGrid({ key: item.key||act.key||res.key, cost: item.cost||act.cost||res.cost, slot: item.slot||act.slot||res.slot, edition: item.edition||act.edition||res.edition })
+      ]);
+      body.appendChild(p);
+      break;
+    }
+
+    case 'SHOP_SELL': {
+      const item = act.item || res.item || {};
+      const p = panel('Shop Sell', [
+        statGrid({ key: item.key||act.key||res.key, value: res.value||act.value })
+      ]);
+      body.appendChild(p);
+      break;
+    }
+
+    case 'SHOP_REROLL': {
+      const p = panel('Shop Reroll', [
+        statGrid({ reroll_number: res.reroll_number||act.reroll_number, cost: res.cost||act.cost })
+      ]);
+      body.appendChild(p);
+      break;
+    }
+
+    case 'PACK_OPENED': {
+      const opts = res.options || act.options || [];
+      const sel  = res.selected || act.selected;
+      const p = panel(`Pack Opened — ${res.pack_key||act.pack_key||'?'}`, []);
+      const optsDiv = document.createElement('div'); optsDiv.style.display='flex'; optsDiv.style.flexWrap='wrap'; optsDiv.style.gap='5px'; optsDiv.style.marginTop='4px';
+      for (const o of opts) {
+        const key = typeof o === 'string' ? o : (o.key||o.name||'?');
+        const span = document.createElement('span');
+        span.style.cssText = `font-size:0.7rem;padding:3px 8px;border-radius:3px;border:1px solid var(--border);background:var(--surface);color:${key===sel?'var(--green)':'var(--text)'};border-color:${key===sel?'var(--green)':'var(--border)'}`;
+        span.textContent = key.replace(/^[cpv]_/,'') + (key===sel?' ✓':'');
+        optsDiv.appendChild(span);
+      }
+      p.appendChild(optsDiv);
+      if (res.target_cards && res.target_cards.length) {
+        p.appendChild(small('Target: ', 'var(--dim)'));
+        p.appendChild(cardsRow(res.target_cards));
+      }
+      body.appendChild(p);
+      break;
+    }
+
+    case 'CONSUMABLE_USED': {
+      const p = panel(`Consumable Used — ${act.key||res.key||'?'}`, [
+        statGrid({ type: res.type||act.type, targets: (res.targets||act.targets||[]).length+' cards' })
+      ]);
+      if ((res.targets||act.targets||[]).length) p.appendChild(cardsRow(res.targets||act.targets));
+      body.appendChild(p);
+      break;
+    }
+
+    case 'CONSUMABLE_SNAPSHOT': {
+      const items = res.consumables || act.consumables || [];
+      const p = panel(`Consumable Snapshot (${items.length})`, []);
+      for (const c of items) {
+        const ci = document.createElement('div'); ci.className='consumable-item';
+        ci.textContent = (c.key||c.name||'?');
+        p.appendChild(ci);
+      }
+      body.appendChild(p);
+      break;
+    }
+
+    case 'DECK_CHANGE': {
+      const p = panel(`Deck Change — ${res.cause||act.cause||'?'}`, []);
+      if ((res.added||act.added||[]).length) { p.appendChild(small('Added:')); p.appendChild(cardsRow(res.added||act.added)); }
+      if ((res.removed||act.removed||[]).length) { p.appendChild(small('Removed:')); p.appendChild(cardsRow(res.removed||act.removed)); }
+      if ((res.modified||act.modified||[]).length) { p.appendChild(small('Modified:')); p.appendChild(cardsRow(res.modified||act.modified)); }
+      const deckSnap = res.deck_snapshot || act.deck_snapshot;
+      if (deckSnap && Array.isArray(deckSnap)) { p.appendChild(small('Deck after:')); p.appendChild(cardsRow(deckSnap)); }
+      body.appendChild(p);
+      break;
+    }
+
+    case 'MONEY_CHANGE': {
+      const delta = res.delta ?? act.delta ?? 0;
+      const pill = document.createElement('span');
+      pill.className = 'money-pill ' + (delta >= 0 ? 'pos' : 'neg');
+      pill.textContent = (delta >= 0 ? '+' : '') + delta + ' $';
+      const balEl = document.createElement('span');
+      balEl.style.cssText = 'font-size:0.72rem;color:var(--money);margin-left:8px;';
+      balEl.textContent = '→ $' + (res.balance_after ?? act.balance_after ?? '?');
+      const src = document.createElement('div');
+      src.style.cssText = 'font-size:0.65rem;color:var(--dim);margin-top:4px;';
+      src.textContent = (res.source||act.source||'?') + (res.detail||act.detail ? ' — '+(res.detail||act.detail) : '');
+      const wrap = document.createElement('div'); wrap.appendChild(pill); wrap.appendChild(balEl); wrap.appendChild(src);
+      const p = panel('Money Change', [ wrap ]);
+      body.appendChild(p);
+      break;
+    }
+
+    case 'GAME_WIN': {
+      const p = panel('Game Won ★', []);
+      p.style.borderColor = 'var(--green)';
+      body.appendChild(p);
+      break;
+    }
+
+    case 'GAME_OVER': {
+      const p = panel('Game Over', [
+        statGrid({ cause: res.cause||act.cause||'run_ended', ante: res.ante||act.ante, round: res.round||act.round })
+      ]);
+      p.style.borderColor = 'var(--mult)';
+      body.appendChild(p);
+      break;
+    }
+
+    case 'RNG_CALL': {
+      const p = panel('RNG Call', [
+        statGrid({ purpose: res.purpose||act.purpose, result: res.result??act.result, index: res.rng_index??act.rng_index })
+      ]);
+      body.appendChild(p);
+      break;
+    }
+
+    case 'BOSS_REROLL': {
+      const p = panel('Boss Blind Rerolled', [
+        statGrid({ old_boss: res.old_boss||act.old_boss, new_boss: res.new_boss||act.new_boss, cost: res.cost||act.cost })
+      ]);
+      body.appendChild(p);
+      break;
+    }
+
+    default: {
+      // Generic fallback — show action + resolution
+      const combined = Object.assign({}, act, res);
+      if (Object.keys(combined).length) {
+        body.appendChild(panel('Details', [ statGrid(combined) ]));
+      } else {
+        body.appendChild(txt('(no data)', ''));
+      }
+    }
+  }
+
+  // State before/after below main content (also rendered in sidebars)
+  body.appendChild(rawJSON(ev));
+}
+
+// ─── App state ──────────────────────────────────────────────────────────────
+
+let events = [];
+let idx = 0;
+
+function go(i) {
+  if (!events.length) return;
+  idx = Math.max(0, Math.min(events.length - 1, i));
+  const ev = events[idx];
+
+  // Badge
+  const badge = document.getElementById('event-badge');
+  badge.textContent = ev.event;
+  badge.style.background = (EVENT_COLORS[ev.event] || '#6b7f8a') + '33';
+  badge.style.color = EVENT_COLORS[ev.event] || '#6b7f8a';
+  badge.style.border = '1px solid ' + (EVENT_COLORS[ev.event] || '#6b7f8a') + '66';
+
+  document.getElementById('seq-num').textContent = `#${ev.seq}`;
+  document.getElementById('event-ts').textContent = new Date(ev.ts * 1000).toLocaleTimeString();
+  document.getElementById('counter').textContent = `${idx + 1} / ${events.length}`;
+
+  // Sidebars
+  renderStateSidebar(ev.state_before, document.getElementById('sb-before-body'));
+  renderStateSidebar(ev.state_after,  document.getElementById('sb-after-body'));
+
+  // Main body
+  renderEvent(ev);
+
+  // Timeline
+  document.querySelectorAll('.tl-dot').forEach((d, di) => {
+    d.classList.toggle('active', di === idx);
+  });
+  // scroll active dot into view
+  const activeDot = document.querySelector('.tl-dot.active');
+  if (activeDot) activeDot.scrollIntoView({ block: 'nearest', inline: 'center' });
+
+  document.getElementById('btn-prev').disabled  = idx === 0;
+  document.getElementById('btn-first').disabled = idx === 0;
+  document.getElementById('btn-next').disabled  = idx === events.length - 1;
+  document.getElementById('btn-last').disabled  = idx === events.length - 1;
+}
+
+function loadJSONL(text) {
+  const lines = text.trim().split('\n').filter(l => l.trim().startsWith('{'));
+  const parsed = [];
+  for (const line of lines) {
+    try { parsed.push(JSON.parse(line)); } catch(e) { /* skip */ }
+  }
+  if (!parsed.length) { alert('No valid JSON events found.'); return; }
+  events = parsed;
+  idx = 0;
+
+  // Run info
+  const first = events[0];
+  const ri = document.getElementById('run-info');
+  if (first && first.action && first.action.seed) {
+    ri.innerHTML = `Seed: <span>${first.action.seed}</span>  &nbsp;|&nbsp;  ${events.length} events`;
+  } else {
+    ri.textContent = events.length + ' events';
+  }
+
+  // Build timeline
+  const tl = document.getElementById('timeline');
+  tl.innerHTML = '';
+  for (let i = 0; i < events.length; i++) {
+    const ev = events[i];
+    const dot = document.createElement('div');
+    dot.className = 'tl-dot';
+    dot.style.background = EVENT_COLORS[ev.event] || '#6b7f8a';
+    dot.title = `#${ev.seq} ${ev.event}`;
+    dot.addEventListener('click', () => go(i));
+    tl.appendChild(dot);
+  }
+
+  // Hide overlay
+  document.getElementById('drop-overlay').classList.add('hidden');
+
+  go(0);
+}
+
+// ─── File loading ────────────────────────────────────────────────────────────
+
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => loadJSONL(e.target.result);
+  reader.readAsText(file);
+}
+
+document.getElementById('file-input').addEventListener('change', e => handleFile(e.target.files[0]));
+document.getElementById('file-input-overlay').addEventListener('change', e => handleFile(e.target.files[0]));
+
+// ─── Drag and drop ──────────────────────────────────────────────────────────
+
+const dropBox = document.getElementById('drop-box');
+['dragenter','dragover'].forEach(ev => {
+  document.addEventListener(ev, e => { e.preventDefault(); dropBox.classList.add('drag-over'); });
+});
+['dragleave','drop'].forEach(ev => {
+  document.addEventListener(ev, e => { e.preventDefault(); dropBox.classList.remove('drag-over'); });
+});
+document.addEventListener('drop', e => {
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+
+// ─── Navigation ──────────────────────────────────────────────────────────────
+
+document.getElementById('btn-first').addEventListener('click', () => go(0));
+document.getElementById('btn-prev').addEventListener('click',  () => go(idx - 1));
+document.getElementById('btn-next').addEventListener('click',  () => go(idx + 1));
+document.getElementById('btn-last').addEventListener('click',  () => go(events.length - 1));
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft'  || e.key === 'a') go(idx - 1);
+  if (e.key === 'ArrowRight' || e.key === 'd') go(idx + 1);
+  if (e.key === 'Home') go(0);
+  if (e.key === 'End')  go(events.length - 1);
+});
+</script>
+</body>
+</html>
