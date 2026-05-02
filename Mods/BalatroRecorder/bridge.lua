@@ -47,7 +47,19 @@ end
 -- ── write_state ──────────────────────────────────────────────────────────────
 -- Writes compact game state to STATE_PATH atomically (tmp → rename).
 function Bridge.write_state()
-    if not (G and G.GAME) then return end
+    if not G then return end
+    -- During SPLASH/loading G.GAME is nil — write a minimal state so the agent
+    -- knows the game is alive and just loading, rather than seeing a stale file.
+    if not G.GAME then
+        local json = require("dkjson")
+        local tmp = STATE_PATH .. ".tmp"
+        local f = io.open(tmp, "w")
+        if not f then return end
+        f:write(json.encode({ state = state_name() }))
+        f:close()
+        os.rename(tmp, STATE_PATH)
+        return
+    end
     local json = require("dkjson")
     local enc  = require("encoder")
     local snap = require("snapshot")

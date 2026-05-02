@@ -168,14 +168,16 @@ Transitions to SHOP.
 {"action": "start_run", "deck": "b_red", "stake": 1, "seed": "ABCD1234"}
 ```
 
-Tries `G.FUNCS.continue_run` first (resumes saved run), then falls back to `G:start_run` with the given deck (default `b_red`). Write this to command.json right after launch — the bridge polls every frame regardless of game state.
+**Always ask the user first: continue the saved run or start a new one?**
+`start_run` tries `G.FUNCS.continue_run` first (resumes saved run), then falls back to `G:start_run` with the given deck (default `b_red`). There is no separate "new run" vs "continue" command — if a saved run exists, `start_run` always resumes it.
 
 ### Any state
 
 ```json
+{"action": "use_consumable", "consumable_slot": 1}
 {"action": "use_consumable", "consumable_slot": 1, "hand_indices": [2, 3]}
 ```
-Unverified — use with caution.
+`consumable_slot` is 1-based from `consumables[]` in state.json. `hand_indices` only needed for tarot cards that target cards (e.g. The Empress). Planet cards need no `hand_indices`. Verified working for planet cards.
 
 ---
 
@@ -256,22 +258,25 @@ Best to worst:
 | Can't open booster packs | **Not fixed** | Skip packs in shop |
 | `next_round` (leave shop) | **Fixed** in bridge.lua | Uses `G.FUNCS.toggle_shop` |
 | Card strings in play/discard ignored | **By design** | Always use `hand_indices` |
+| state.json silent during SPLASH | **Fixed** in bridge.lua | Now writes `{"state":"SPLASH"}` when G.GAME is nil so agent knows game is loading |
 | Module cache: edits need restart | **By design** | Restart game after any bridge.lua / snapshot.lua change |
 
 ---
 
 ## Play Session Checklist
 
-1. **Verify the game is running** — check for a running Balatro process before anything else. If it's not running, launch it (see Launch section above) and wait ~10s for state.json to appear.
+1. **Verify the game is running** — use the Launch section checklist (timestamp check, kill zombie, delete stale command.json, launch, confirm).
 2. Read state.json — confirm it exists and `state` is a known value
-3. Confirm command.json does NOT exist (no stuck command)
-3. If state is BLIND_SELECT: `select_blind`
-4. If state is SELECTING_HAND: read hand, pick best action
-5. After writing command.json: re-read state.json until file is gone (command executed)
-6. If state is ROUND_EVAL: `cash_out`
-7. If state is SHOP: buy jokers, then `next_round`
-8. If state is 2 or 3 (animation): re-read and wait, no action
-9. If state is GAME_OVER: stop and report
+3. If state is SPLASH: wait, re-read every 3s until it changes (game still loading)
+4. Confirm command.json does NOT exist (no stuck command)
+5. If state is MENU: ask user — continue saved run or start new? Then send `start_run`
+6. If state is BLIND_SELECT: `select_blind`
+7. If state is SELECTING_HAND: read hand, pick best action
+8. After writing command.json: re-read state.json until file is gone (command executed)
+9. If state is ROUND_EVAL: `cash_out`
+10. If state is SHOP: buy jokers, then `next_round`
+11. If state is HAND_PLAYED or DRAW_TO_HAND (animation): re-read and wait, no action
+12. If state is GAME_OVER: stop and report
 
 ---
 
