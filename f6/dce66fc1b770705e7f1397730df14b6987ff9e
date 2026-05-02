@@ -1,0 +1,31 @@
+Mods/BalatroRecorder/encoder.lua
+  4bf22c338421d1e6 84-85,93-94
+Mods/BalatroRecorder/init.lua
+  4bf22c338421d1e6 27-31,99,101,114-116,118,144-156,207-227,347
+Mods/BalatroRecorder/hooks.lua
+  4bf22c338421d1e6 51-58,62,64-71,75,93-103,109-170,172,181,225-230,248-251,254,257,259-261,267,342,356-357,426-438,446,585-586,590-624,626,633-640,642-718,757-761
+Mods/BalatroRecorder/config.lua
+  4bf22c338421d1e6 21-22,38
+Mods/BalatroRecorder/snapshot.lua
+  4bf22c338421d1e6 64-119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "f6dce66fc1b770705e7f1397730df14b6987ff9e",
+  "prompts": {
+    "4bf22c338421d1e6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c7ffbfa0-e15b-4a77-96db-1992d7485caf",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "Nour Sabouny",
+      "messages": [],
+      "total_additions": 507,
+      "total_deletions": 105,
+      "accepted_lines": 490,
+      "overriden_lines": 0
+    }
+  }
+}
