@@ -24,6 +24,11 @@ BREC = {
     pending_shop_inventory = false,
     pending_deck_diff   = false,
     deck_snapshot       = nil,  -- last known deck card list
+    last_pack_key          = nil,
+    pending_round_start    = false,
+    _pending_use_type      = nil,
+    _pending_consumable    = nil,
+    _pending_pack_pick     = nil,
 }
 
 local function brec_error(msg)
@@ -91,8 +96,9 @@ function BrecInit.startup()
     -- ── use_card ──
     local orig_use = G.FUNCS.use_card
     G.FUNCS.use_card = function(e, mute, nosave)
-        safe(h.on_use_card, e)
+        safe(h.on_before_use_card, e)
         orig_use(e, mute, nosave)
+        safe(h.on_after_use_card, e)
     end
 
     -- ── select_blind ──
@@ -105,9 +111,11 @@ function BrecInit.startup()
     -- ── skip_blind ──
     local orig_skip_blind = G.FUNCS.skip_blind
     G.FUNCS.skip_blind = function(e)
-        local tags_before = G.tags and #G.tags or 0
+        -- capture BEFORE orig runs: blind_on_deck advances after skip, tags not yet added
+        local blind_before = G.GAME and G.GAME.blind_on_deck
+        local tags_before  = G.GAME and G.GAME.tags and #G.GAME.tags or 0
         orig_skip_blind(e)
-        safe(h.on_blind_skipped, e, tags_before)
+        safe(h.on_blind_skipped, e, tags_before, blind_before)
     end
 
     -- ── reroll_boss ──
@@ -131,6 +139,19 @@ function BrecInit.startup()
         orig_start_run(e, args)
         -- on_run_start is called from update loop when state transitions to NEW_ROUND/SELECTING_HAND for the first time
         BREC.run_pending_init = true
+    end
+
+    -- ── game_over (win/loss) ──
+    -- G.FUNCS.game_over is called with won=true on a win, won=false on a loss
+    if G.FUNCS.game_over then
+        local orig_game_over = G.FUNCS.game_over
+        G.FUNCS.game_over = function(won, ...)
+            if BREC.active then
+                safe(h.on_game_over, won)
+                BREC.active = false
+            end
+            orig_game_over(won, ...)
+        end
     end
 
     -- ── ease_dollars (money tracking) ──
@@ -178,6 +199,27 @@ function BrecInit.startup()
                 if jk.chip_mod  then step.chips_delta = jk.chip_mod  end
                 if jk.Xmult_mod then step.xmult       = jk.Xmult_mod end
                 if step.mult_delta or step.chips_delta or step.xmult then
+                    table.insert(BREC.scoring_chain, step)
+                end
+            end
+        end
+
+        -- capture held-in-hand card effects (Steel x1.5, Lucky mult/dollars, etc.)
+        if BREC.scoring_active and context and context.cardarea == G.hand and result then
+            local hres = result.hand
+            if hres and next(hres) then
+                local base = card.base or {}
+                local enh  = card.ability and card.ability.effect
+                local label = (base.value or "?") .. (base.suit or "?")
+                if enh and enh ~= '' and enh ~= 'Base' then
+                    label = label .. "[" .. enh .. "]"
+                end
+                local step = { source = "held_" .. label, held = true }
+                if hres.Xmult_mod  then step.xmult       = hres.Xmult_mod  end
+                if hres.mult_mod   then step.mult_delta   = hres.mult_mod   end
+                if hres.chip_mod   then step.chips_delta  = hres.chip_mod   end
+                if hres.dollars    then step.dollars      = hres.dollars    end
+                if step.xmult or step.mult_delta or step.chips_delta or step.dollars then
                     table.insert(BREC.scoring_chain, step)
                 end
             end
@@ -302,10 +344,7 @@ function BrecInit.update()
     end
     BREC.prev_dollars = cur_dollars
 
-    -- ── GAME OVER detection (state 4) ──
-    if cur_state == G.STATES.GAME_OVER and BREC.active then
-        BREC.active = false
-    end
+    -- GAME_OVER / GAME_WIN deactivation handled by G.FUNCS.game_over wrapper
 end
 
 return BrecInit

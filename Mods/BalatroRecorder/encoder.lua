@@ -81,8 +81,8 @@ function Encoder.joker(j)
         result.perish_tally = ability.perish_tally
     end
     if ability.rental      then result.rental         = true end
-    -- Capture any numeric extra fields (soul, etc.)
-    if ability.extra then
+    -- Capture any numeric extra fields; extra can be a plain number on simple jokers
+    if type(ability.extra) == 'table' then
         local extras = {}
         for k, v in pairs(ability.extra) do
             if type(v) == 'number' or type(v) == 'boolean' then
@@ -90,6 +90,8 @@ function Encoder.joker(j)
             end
         end
         if next(extras) then result.extra = extras end
+    elseif type(ability.extra) == 'number' then
+        result.extra = ability.extra
     end
     return result
 end

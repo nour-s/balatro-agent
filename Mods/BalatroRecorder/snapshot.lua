@@ -61,6 +61,62 @@ function Snapshot.compact()
     }
 end
 
+-- End-of-run statistics (mirrors what Balatro shows on the win screen)
+function Snapshot.win_stats()
+    if not (G and G.GAME) then return {} end
+
+    -- compile from per-hand-type play data
+    local total_hands_played = 0
+    local most_played_hand   = nil
+    local most_played_count  = 0
+    local hand_plays         = {}
+
+    if G.GAME.hands then
+        for name, h in pairs(G.GAME.hands) do
+            local p = h.played or 0
+            total_hands_played = total_hands_played + p
+            hand_plays[name]   = p
+            if p > most_played_count then
+                most_played_count = p
+                most_played_hand  = name
+            end
+        end
+    end
+
+    return {
+        ante_reached        = G.GAME.round_resets and G.GAME.round_resets.ante or G.GAME.ante,
+        round_reached       = G.GAME.round or 0,
+        total_hands_played  = total_hands_played,
+        most_played_hand    = most_played_hand,
+        hand_plays          = hand_plays,
+        hand_levels         = Snapshot.hand_levels(),
+        dollars_remaining   = G.GAME.dollars or 0,
+        jokers_owned        = G.jokers and #G.jokers.cards or 0,
+        deck_size           = G.deck and #G.deck.cards or 0,
+        -- fields Balatro may or may not populate depending on version
+        cards_played        = G.GAME.cards_played,
+        cards_discarded     = G.GAME.cards_discarded,
+        vouchers_bought     = G.GAME.vouchers_bought,
+        shop_rerolls        = BREC and BREC.shop_reroll_count or 0,
+    }
+end
+
+-- All poker hand levels, play counts, and current chips/mult values
+function Snapshot.hand_levels()
+    if not (G and G.GAME and G.GAME.hands) then return {} end
+    local out = {}
+    for name, h in pairs(G.GAME.hands) do
+        out[name] = {
+            level              = h.level or 1,
+            played             = h.played or 0,
+            played_this_round  = h.played_this_round or 0,
+            chips              = h.chips or 0,
+            mult               = h.mult  or 0,
+        }
+    end
+    return out
+end
+
 -- Full joker graph with copy-relationships
 function Snapshot.joker_graph()
     if not (G and G.jokers) then return {} end
