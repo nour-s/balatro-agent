@@ -166,10 +166,14 @@ Transitions to SHOP.
 ```json
 {"action": "start_run"}
 {"action": "start_run", "deck": "b_red", "stake": 1, "seed": "ABCD1234"}
+{"action": "start_run", "continue": true}
 ```
 
 **Always ask the user first: continue the saved run or start a new one?**
-`start_run` tries `G.FUNCS.continue_run` first (resumes saved run), then falls back to `G:start_run` with the given deck (default `b_red`). There is no separate "new run" vs "continue" command — if a saved run exists, `start_run` always resumes it.
+- `{"action": "start_run"}` — starts a **new run** with optional `deck`/`stake`/`seed`.
+- `{"action": "start_run", "continue": true}` — resumes the saved run (loads `save.jkr`).
+
+Both routes go through `G.FUNCS.start_run` which calls `G:delete_run()` → `G.MAIN_MENU_UI:remove()`. This is required to dismiss the main menu overlay (the locked-card hint card); skipping it leaves that UI element floating over the entire run.
 
 ### Any state
 
@@ -259,6 +263,7 @@ Best to worst:
 | `next_round` (leave shop) | **Fixed** in bridge.lua | Uses `G.FUNCS.toggle_shop` |
 | Card strings in play/discard ignored | **By design** | Always use `hand_indices` |
 | state.json silent during SPLASH | **Fixed** in bridge.lua | Now writes `{"state":"SPLASH"}` when G.GAME is nil so agent knows game is loading |
+| Main menu overlay stuck on screen | **Fixed** in bridge.lua | `start_run` now routes through `G.FUNCS.start_run` so `G:delete_run()` fires and removes `G.MAIN_MENU_UI` |
 | Module cache: edits need restart | **By design** | Restart game after any bridge.lua / snapshot.lua change |
 
 ---

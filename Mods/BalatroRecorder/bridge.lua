@@ -207,13 +207,22 @@ function Bridge.execute(cmd)
         end
 
     elseif action == "start_run" then
-        -- Works from main menu (G.GAME may be nil here).
-        -- Tries continue first, then falls back to a new run with Red Deck.
-        if G.FUNCS.continue_run then
-            pcall(G.FUNCS.continue_run, {config = {}})
-        elseif G.start_run then
+        -- Route through G.FUNCS.start_run so G:delete_run() fires and
+        -- G.MAIN_MENU_UI:remove() is called — without this the main menu
+        -- overlay (locked card hint) persists on top of the entire run.
+        if cmd.continue then
+            -- Continue saved run: load save file the same way can_continue does.
+            if not G.SAVED_GAME then
+                G.SAVED_GAME = get_compressed(G.SETTINGS.profile .. '/' .. 'save.jkr')
+                if G.SAVED_GAME ~= nil then G.SAVED_GAME = STR_UNPACK(G.SAVED_GAME) end
+            end
+            if G.SAVED_GAME then
+                pcall(G.FUNCS.start_run, nil, {savetext = G.SAVED_GAME})
+            end
+        else
+            -- New run with optional deck/stake/seed.
             local deck_key = cmd.deck or "b_red"
-            pcall(G.start_run, G, {
+            pcall(G.FUNCS.start_run, nil, {
                 stake     = cmd.stake or 1,
                 seed      = cmd.seed or nil,
                 challenge = nil,
