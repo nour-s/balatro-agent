@@ -17,3 +17,4 @@ Balatro.exe
 7zip.tar.xz
 UNTESTED-*
 pr-plan.md
+__pycache__/

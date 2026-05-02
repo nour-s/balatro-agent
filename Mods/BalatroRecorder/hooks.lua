@@ -17,7 +17,10 @@ function Hooks.on_run_start()
     local back_key = back and back.config and back.config.center and back.config.center.key
     local stake  = G.GAME.stake or 1
 
-    rec.open_run(tostring(seed))
+    local round_resets = G.GAME.round_resets or 0
+    local ante         = G.GAME.ante or 1
+    local is_fresh     = (round_resets == 0) and (ante <= 1)
+    rec.open_run(tostring(seed), is_fresh)
 
     rec.emit("RUN_START", {
         state_before = {},
