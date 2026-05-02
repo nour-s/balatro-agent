@@ -53,7 +53,16 @@ function Snapshot.compact()
         hands_left    = cr.hands_left or 0,
         discards_left = cr.discards_left or 0,
         chips_scored  = G.GAME.chips or 0,
-        chips_needed  = G.GAME.blind and G.GAME.blind.chips or 0,
+        chips_needed  = (function()
+            local b = G.GAME.blind
+            if not b then return 0 end
+            -- blind.chips is the target set by Balatro; fall back to config path if zero
+            if b.chips and b.chips > 0 then return b.chips end
+            if b.config and b.config.blind and b.config.blind.chips then
+                return b.config.blind.chips
+            end
+            return 0
+        end)(),
         dollars       = G.GAME.dollars or 0,
         deck_size     = G.deck and #G.deck.cards or 0,
         joker_count   = G.jokers and #G.jokers.cards or 0,

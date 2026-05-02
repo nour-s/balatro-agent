@@ -258,6 +258,13 @@ local last_hand_play_state = nil  -- detect HAND_PLAYED→DRAW_TO_HAND transitio
 local shop_inventory_frame_wait = 0  -- frames to wait after reroll before reading new inventory
 
 function BrecInit.update()
+    -- Poll bridge commands before the G.GAME guard so start_run works from main menu.
+    if G then
+        local bridge = require("bridge")
+        local cmd = bridge.read_command()
+        if cmd then safe(bridge.execute, cmd) end
+    end
+
     if not (G and G.STATE and G.GAME) then return end
 
     local h = require("hooks")
@@ -274,6 +281,27 @@ function BrecInit.update()
             BREC.deck_snapshot = deck_fingerprint(G.deck.cards)
         end
         safe(h.on_run_start)
+    end
+
+    -- ── Fallback activation for resumed/continued runs ──
+    -- If BREC was never activated via start_run (e.g. game loaded via continue),
+    -- activate automatically when we detect an in-progress run.
+    if not BREC.active and G.GAME and G.GAME.round and G.GAME.round > 0 then
+        BREC.active           = true
+        BREC.rng_index        = 0
+        BREC.shop_reroll_count= 0
+        if G.deck then
+            BREC.deck_snapshot = deck_fingerprint(G.deck.cards)
+        end
+        print("[BalatroRecorder] Activated via resumed-run fallback (round=" .. tostring(G.GAME.round) .. ")")
+    end
+
+    -- ── Action bridge: state write (always, even before run starts) ──────────
+    local bridge = require("bridge")
+    BREC._state_frame = (BREC._state_frame or 0) + 1
+    if BREC._state_frame >= 30 then
+        BREC._state_frame = 0
+        safe(bridge.write_state)
     end
 
     if not BREC.active then return end
@@ -347,15 +375,6 @@ function BrecInit.update()
 
     -- GAME_OVER / GAME_WIN deactivation handled by G.FUNCS.game_over wrapper
 
-    -- ── Action bridge ─────────────────────────────────────────────────────────
-    local bridge = require("bridge")
-    BREC._state_frame = BREC._state_frame + 1
-    if BREC._state_frame >= 30 then
-        BREC._state_frame = 0
-        safe(bridge.write_state)
-    end
-    local cmd = bridge.read_command()
-    if cmd then safe(bridge.execute, cmd) end
 end
 
 return BrecInit

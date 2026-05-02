@@ -47,7 +47,7 @@ end
 -- ── write_state ──────────────────────────────────────────────────────────────
 -- Writes compact game state to STATE_PATH atomically (tmp → rename).
 function Bridge.write_state()
-    if not (G and G.GAME and G.hand) then return end
+    if not (G and G.GAME) then return end
     local json = require("dkjson")
     local enc  = require("encoder")
     local snap = require("snapshot")
@@ -132,12 +132,25 @@ function Bridge.execute(cmd)
 
     elseif action == "select_blind" then
         if G.STATE == 7 then  -- BLIND_SELECT
-            G.FUNCS.select_blind({config = {}})
+            -- blind_choices stores string keys (e.g. 'bl_small'); look up the actual
+            -- blind data table in G.P_BLINDS so set_blind() and discover_card() get
+            -- a table, not a string (string causes crash in discover_card).
+            local rr = G.GAME.round_resets or {}
+            local choices = rr.blind_choices or {}
+            local deck = G.GAME.blind_on_deck or ""
+            local key = choices[deck] or choices.Boss
+            local ref = G.P_BLINDS and G.P_BLINDS[key]
+            G.FUNCS.select_blind({config = {ref_table = ref}})
         end
 
     elseif action == "skip_blind" then
         if G.STATE == 7 then
-            G.FUNCS.skip_blind({config = {}})
+            local rr = G.GAME.round_resets or {}
+            local choices = rr.blind_choices or {}
+            local deck = G.GAME.blind_on_deck or ""
+            local key = choices[deck] or choices.Boss
+            local ref = G.P_BLINDS and G.P_BLINDS[key]
+            G.FUNCS.skip_blind({config = {ref_table = ref}})
         end
 
     elseif action == "cash_out" then
@@ -173,7 +186,27 @@ function Bridge.execute(cmd)
 
     elseif action == "next_round" then
         if G.STATE == G.STATES.SHOP then
-            G.FUNCS.toggle_shop({config = {}})
+            -- try the standard shop exit; Balatro versions differ on the exact call
+            if G.FUNCS.toggle_shop then
+                G.FUNCS.toggle_shop({config = {}})
+            elseif G.FUNCS.end_round then
+                G.FUNCS.end_round({config = {}})
+            end
+        end
+
+    elseif action == "start_run" then
+        -- Works from main menu (G.GAME may be nil here).
+        -- Tries continue first, then falls back to a new run with Red Deck.
+        if G.FUNCS.continue_run then
+            pcall(G.FUNCS.continue_run, {config = {}})
+        elseif G.start_run then
+            local deck_key = cmd.deck or "b_red"
+            pcall(G.start_run, G, {
+                stake     = cmd.stake or 1,
+                seed      = cmd.seed or nil,
+                challenge = nil,
+                deck      = G.P_CENTERS and G.P_CENTERS[deck_key] or nil,
+            })
         end
 
     elseif action == "use_consumable" then
