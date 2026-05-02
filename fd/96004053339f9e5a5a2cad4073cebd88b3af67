@@ -1,0 +1,23 @@
+skills/balatro.md
+  4bf22c338421d1e6 1-295
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "fd96004053339f9e5a5a2cad4073cebd88b3af67",
+  "prompts": {
+    "4bf22c338421d1e6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c7ffbfa0-e15b-4a77-96db-1992d7485caf",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "Nour Sabouny",
+      "messages": [],
+      "total_additions": 246,
+      "total_deletions": 72,
+      "accepted_lines": 295,
+      "overriden_lines": 0
+    }
+  }
+}
