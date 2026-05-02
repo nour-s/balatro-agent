@@ -29,6 +29,7 @@ BREC = {
     _pending_use_type      = nil,
     _pending_consumable    = nil,
     _pending_pack_pick     = nil,
+    _state_frame           = 0,
 }
 
 local function brec_error(msg)
@@ -345,6 +346,16 @@ function BrecInit.update()
     BREC.prev_dollars = cur_dollars
 
     -- GAME_OVER / GAME_WIN deactivation handled by G.FUNCS.game_over wrapper
+
+    -- ── Action bridge ─────────────────────────────────────────────────────────
+    local bridge = require("bridge")
+    BREC._state_frame = BREC._state_frame + 1
+    if BREC._state_frame >= 30 then
+        BREC._state_frame = 0
+        safe(bridge.write_state)
+    end
+    local cmd = bridge.read_command()
+    if cmd then safe(bridge.execute, cmd) end
 end
 
 return BrecInit

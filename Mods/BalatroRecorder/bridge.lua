@@ -1,0 +1,191 @@
+-- BalatroRecorder bridge.lua
+-- File-based IPC for Claude <-> game bidirectional control.
+--   Out: write_state() dumps compact game state to ~/balatro-logs/state.json every ~30 frames
+--   In:  read_command() polls ~/balatro-logs/command.json; execute(cmd) dispatches it
+
+local Bridge = {}
+
+local cfg          = require("brec_config")
+local STATE_PATH   = cfg.LOG_DIR .. "/state.json"
+local COMMAND_PATH = cfg.LOG_DIR .. "/command.json"
+
+-- Resolve G.STATE integer to a human-readable name
+local function state_name()
+    if not (G and G.STATES and G.STATE) then return "UNKNOWN" end
+    for k, v in pairs(G.STATES) do
+        if v == G.STATE then return k end
+    end
+    return tostring(G.STATE)
+end
+
+-- Encode hand cards with 1-based idx for command use
+local function encode_hand()
+    local enc = require("encoder")
+    local out = {}
+    for i, c in ipairs(G.hand and G.hand.cards or {}) do
+        local t = enc.card(c)
+        t.idx = i
+        table.insert(out, t)
+    end
+    return out
+end
+
+-- Encode one shop CardArea into {slot, key, cost, ...} list
+local function encode_shop_area(area)
+    local enc = require("encoder")
+    local out = {}
+    for i, c in ipairs(area and area.cards or {}) do
+        local item = enc.shop_item(c)
+        if item then
+            item.slot = i
+            table.insert(out, item)
+        end
+    end
+    return out
+end
+
+-- ── write_state ──────────────────────────────────────────────────────────────
+-- Writes compact game state to STATE_PATH atomically (tmp → rename).
+function Bridge.write_state()
+    if not (G and G.GAME and G.hand) then return end
+    local json = require("dkjson")
+    local enc  = require("encoder")
+    local snap = require("snapshot")
+    local s    = snap.compact()
+
+    local data = {
+        state         = state_name(),
+        ante          = s.ante,
+        round         = s.round,
+        hands_left    = s.hands_left,
+        discards_left = s.discards_left,
+        chips_scored  = s.chips_scored,
+        chips_needed  = s.chips_needed,
+        dollars       = s.dollars,
+        hand          = encode_hand(),
+        jokers        = enc.joker_list(G.jokers and G.jokers.cards or {}),
+        consumables   = enc.consumable_list(G.consumeables and G.consumeables.cards or {}),
+        shop = {
+            jokers   = encode_shop_area(G.shop_jokers),
+            vouchers = encode_shop_area(G.shop_vouchers),
+            boosters = encode_shop_area(G.shop_booster),
+        },
+    }
+
+    local json_str = json.encode(data)
+    local tmp = STATE_PATH .. ".tmp"
+    local f = io.open(tmp, "w")
+    if not f then return end
+    f:write(json_str)
+    f:close()
+    os.rename(tmp, STATE_PATH)
+end
+
+-- ── read_command ─────────────────────────────────────────────────────────────
+-- Returns parsed command table from COMMAND_PATH and deletes the file, or nil.
+function Bridge.read_command()
+    local f = io.open(COMMAND_PATH, "r")
+    if not f then return nil end
+    local contents = f:read("*a")
+    f:close()
+    os.remove(COMMAND_PATH)
+    if not (contents and contents ~= "") then return nil end
+    local json = require("dkjson")
+    local ok, cmd = pcall(json.decode, contents)
+    if ok and type(cmd) == "table" then return cmd end
+    return nil
+end
+
+-- ── highlight helpers ─────────────────────────────────────────────────────────
+
+local function highlight_hand_cards(indices)
+    G.hand.highlighted = {}
+    for _, c in ipairs(G.hand.cards or {}) do
+        c.highlighted = false
+    end
+    for _, idx in ipairs(indices or {}) do
+        local c = G.hand.cards[idx]
+        if c then
+            c.highlighted = true
+            table.insert(G.hand.highlighted, c)
+        end
+    end
+end
+
+-- ── execute ───────────────────────────────────────────────────────────────────
+-- Dispatches a parsed command table to the appropriate G.FUNCS call.
+function Bridge.execute(cmd)
+    if not (cmd and cmd.action) then return end
+    local action = cmd.action
+
+    if action == "play" then
+        if G.STATE == G.STATES.SELECTING_HAND then
+            highlight_hand_cards(cmd.hand_indices or {})
+            G.FUNCS.play_cards_from_highlighted({config = {}})
+        end
+
+    elseif action == "discard" then
+        if G.STATE == G.STATES.SELECTING_HAND then
+            highlight_hand_cards(cmd.hand_indices or {})
+            G.FUNCS.discard_cards_from_highlighted({config = {}})
+        end
+
+    elseif action == "select_blind" then
+        if G.STATE == 7 then  -- BLIND_SELECT
+            G.FUNCS.select_blind({config = {}})
+        end
+
+    elseif action == "skip_blind" then
+        if G.STATE == 7 then
+            G.FUNCS.skip_blind({config = {}})
+        end
+
+    elseif action == "cash_out" then
+        if G.STATE == G.STATES.ROUND_EVAL then
+            G.FUNCS.cash_out({config = {}})
+        end
+
+    elseif action == "reroll_boss" then
+        G.FUNCS.reroll_boss({config = {}})
+
+    elseif action == "reroll_shop" then
+        if G.STATE == G.STATES.SHOP then
+            G.FUNCS.reroll_shop({config = {}})
+        end
+
+    elseif action == "buy" then
+        local area_map = {
+            joker   = G.shop_jokers,
+            voucher = G.shop_vouchers,
+            booster = G.shop_booster,
+        }
+        local area = area_map[cmd.area or "joker"]
+        local card = area and area.cards and area.cards[cmd.slot or 1]
+        if card then
+            G.FUNCS.buy_from_shop({config = {ref_table = card}})
+        end
+
+    elseif action == "sell" then
+        local card = G.jokers and G.jokers.cards and G.jokers.cards[cmd.joker_slot or 1]
+        if card then
+            G.FUNCS.sell_card({config = {ref_table = card}})
+        end
+
+    elseif action == "next_round" then
+        if G.STATE == G.STATES.SHOP then
+            G.FUNCS.toggle_shop({config = {}})
+        end
+
+    elseif action == "use_consumable" then
+        local card = G.consumeables and G.consumeables.cards and
+                     G.consumeables.cards[cmd.consumable_slot or 1]
+        if card then
+            if cmd.hand_indices and #cmd.hand_indices > 0 then
+                highlight_hand_cards(cmd.hand_indices)
+            end
+            G.FUNCS.use_card({config = {ref_table = card}})
+        end
+    end
+end
+
+return Bridge

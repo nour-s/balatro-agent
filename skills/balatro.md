@@ -255,41 +255,144 @@ To run on a new file: copy the script and change the `open(...)` path at line 3.
 
 ---
 
-## Next Feature: Action Bridge (not yet implemented)
+## Game Control via Bridge
 
-Plan at: `~/.claude/plans/someone-create-a-tool-idempotent-thacker.md`
-
-Build bidirectional control via two files in `~/balatro-logs/`:
+Two files in `~/balatro-logs/` form the bidirectional IPC layer:
 
 | File | Writer | Reader | Purpose |
 |------|--------|--------|---------|
-| `state.json` | mod every 30 frames | Claude | Current game state for decisions |
-| `command.json` | Claude | mod every frame | Action to execute; mod deletes after reading |
+| `state.json` | mod (every 30 frames) | Claude | Current game state snapshot |
+| `command.json` | Claude | mod (every frame, then deleted) | Action to execute |
 
-### Command protocol
+The mod polls `command.json` every frame inside `BrecInit.update()`. When found: parse → execute via `Bridge.execute(cmd)` → delete. State is written every 30 frames (~0.5s at 60fps) only while `BREC.active` is true.
+
+**Implemented files:**
+- `Mods/BalatroRecorder/bridge.lua` — `write_state()`, `read_command()`, `execute(cmd)`
+- `init.lua` — bridge polling added at end of `BrecInit.update()`
+- `lovely/init.toml` — bridge.lua registered as a module
+
+**Critical constraint — module cache:** Lua's `require()` caches modules at first load. Edits to `bridge.lua` take effect only after a game restart. New command types added mid-session are silently ignored.
+
+---
+
+### Launch Command
+
+```bash
+cd ~/Library/Application\ Support/Steam/steamapps/common/Balatro/Balatro.app/Contents/MacOS/ && sh run_lovely_macos.sh
+```
+
+Steam must be running first. The script sets `DYLD_INSERT_LIBRARIES=liblovely.dylib` before launching `love`. Without it the mod doesn't load and no bridge files appear.
+
+---
+
+### Reading State
+
+```bash
+cat ~/balatro-logs/state.json
+```
+
+Schema:
 ```json
-{ "action": "play",           "hand_indices": [1, 3, 5] }
-{ "action": "discard",        "hand_indices": [2, 4] }
-{ "action": "buy",            "area": "joker|voucher|booster", "slot": 1 }
-{ "action": "sell",           "joker_slot": 2 }
-{ "action": "reroll_shop" }
-{ "action": "select_blind" }
-{ "action": "skip_blind" }
-{ "action": "reroll_boss" }
-{ "action": "use_consumable", "consumable_slot": 1, "hand_indices": [1, 2] }
+{
+  "state": "SELECTING_HAND",
+  "ante": 1, "round": 1,
+  "hands_left": 4, "discards_left": 3,
+  "chips_scored": 0, "chips_needed": 0,
+  "dollars": 8,
+  "hand": [
+    {"idx": 1, "suit": "Hearts", "value": "Ace", "nominal": 11,
+     "edition": null, "seal": null, "enhancement": null}
+  ],
+  "jokers": [{"pos": 0, "key": "j_blue_joker", "name": "Blue Joker", ...}],
+  "consumables": [],
+  "shop": {
+    "jokers":   [{"slot": 1, "key": "j_...", "cost": 5, "name": "..."}],
+    "vouchers": [{"slot": 1, "key": "v_...", "cost": 10}],
+    "boosters": [{"slot": 1, "key": "p_...", "cost": 4}]
+  }
+}
 ```
 
-### Key implementation note for play/discard
+**Known bug — `chips_needed` always 0:** `G.GAME.blind.chips` is the running score tracker, not the target. Use this table instead:
+
+| Ante | Small | Big   | Boss  |
+|------|-------|-------|-------|
+| 1    | 300   | 450   | 600   |
+| 2    | 800   | 1200  | 1600  |
+| 3    | 2000  | 3000  | 4000  |
+| 4    | 5000  | 7500  | 10000 |
+
+---
+
+### Sending Commands
+
+```bash
+echo '{"action":"play","hand_indices":[1,2,3,4,5]}' > ~/balatro-logs/command.json
+```
+
+Poll for execution (file disappears when mod consumes it):
+```bash
+for i in $(seq 1 10); do
+  [ ! -f ~/balatro-logs/command.json ] && echo "executed" && break
+  sleep 0.3
+done
+```
+
+---
+
+### Command Reference
+
+**Verified working ✓**
+
+| Command | Valid when | Notes |
+|---------|-----------|-------|
+| `{"action":"select_blind"}` | `state == BLIND_SELECT` (7) | Selects current offered blind |
+| `{"action":"skip_blind"}` | `state == BLIND_SELECT` (7) | Skips blind, earns tag |
+| `{"action":"play","hand_indices":[...]}` | `state == SELECTING_HAND` (1) | Indices 1-based from `hand[]` |
+| `{"action":"discard","hand_indices":[...]}` | `state == SELECTING_HAND` (1) | Same indexing |
+| `{"action":"buy","area":"joker","slot":N}` | `state == SHOP` (5) | N is 1-based slot from `shop.jokers[]` |
+| `{"action":"sell","joker_slot":N}` | any | N is 1-based index into `jokers[]` |
+| `{"action":"reroll_shop"}` | `state == SHOP` (5) | |
+| `{"action":"reroll_boss"}` | `state == BLIND_SELECT` (7) | |
+| `{"action":"cash_out"}` | `state == ROUND_EVAL` (6) | Code present, requires game restart to load |
+
+**Broken — needs bridge.lua fix ✗**
+
+| Command | Problem | Fix |
+|---------|---------|-----|
+| `{"action":"buy","area":"booster","slot":N}` | `buy_from_shop` doesn't work for boosters | Use `G.FUNCS.use_card` instead |
+| `{"action":"buy","area":"voucher","slot":N}` | Same | Same fix |
+| `leave_shop` / `next_round` | Not implemented | Add to bridge.lua |
+
+**Booster/voucher fix for bridge.lua:**
 ```lua
-G.hand.highlighted = {}
-for _, idx in ipairs(cmd.hand_indices) do
-    local c = G.hand.cards[idx]
-    if c then table.insert(G.hand.highlighted, c) end
-end
-G.FUNCS.play_cards_from_highlighted({config={}})
+elseif action == "buy" and (cmd.area == "booster" or cmd.area == "voucher") then
+    local area = (cmd.area == "booster") and G.shop_booster or G.shop_vouchers
+    local card = area and area.cards and area.cards[cmd.slot or 1]
+    if card then G.FUNCS.use_card({config = {ref_table = card}}) end
 ```
 
-### Files needed
-- **New:** `Mods/BalatroRecorder/bridge.lua` — `write_state()`, `read_command()`, `execute(cmd)`
-- **Modified:** `init.lua` update() — call bridge every 30 frames and on each frame for commands
-- **Modified:** `lovely/init.toml` — add bridge.lua module patch
+---
+
+### State Transition Map
+
+```
+BLIND_SELECT (7)
+  → select_blind → DRAW_TO_HAND (3) → SELECTING_HAND (1)
+  → skip_blind   → BLIND_SELECT (7) [next blind offered]
+
+SELECTING_HAND (1)
+  → play    → HAND_PLAYED (2) → DRAW_TO_HAND (3) → SELECTING_HAND (1)
+                              → ROUND_EVAL (6)    [round won]
+                              → GAME_OVER (4)     [out of hands]
+  → discard → DRAW_TO_HAND (3) → SELECTING_HAND (1)
+
+ROUND_EVAL (6)
+  → cash_out → SHOP (5)
+
+SHOP (5)
+  → leave_shop → BLIND_SELECT (7)
+```
+
+ROUND_EVAL requires either a `cash_out` command (after game restart) or a manual click.
+SHOP requires either a `leave_shop` command (not yet implemented) or a manual click.

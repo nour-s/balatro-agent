@@ -50,6 +50,12 @@ source = "init.lua"
 before = "main.lua"
 name   = "brec_init"
 
+[[patches]]
+[patches.module]
+source = "bridge.lua"
+before = "main.lua"
+name   = "bridge"
+
 # ── Startup hook: wrap game functions after G:start_up() ──────
 
 [[patches]]
