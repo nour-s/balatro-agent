@@ -129,14 +129,23 @@ function Encoder.deck(cards)
     return out
 end
 
--- Joker list (positional)
-function Encoder.joker_list(joker_cards)
+-- Joker list (positional).
+-- Optional set_filter ("Joker" or "Voucher") restricts output to that set.
+-- G.jokers.cards contains both jokers and owned vouchers — Balatro stores them
+-- together. We split them in the output so the agent sees separate lists and
+-- vouchers don't consume joker slot counts.
+function Encoder.joker_list(joker_cards, set_filter)
     local out = {}
+    local pos = 0
     for i, j in ipairs(joker_cards or {}) do
-        local enc = Encoder.joker(j)
-        if enc then
-            enc.pos = i - 1  -- 0-based position
-            table.insert(out, enc)
+        local item_set = (j.ability or {}).set
+        if not set_filter or item_set == set_filter then
+            local enc = Encoder.joker(j)
+            if enc then
+                enc.pos = pos
+                pos = pos + 1
+                table.insert(out, enc)
+            end
         end
     end
     return out

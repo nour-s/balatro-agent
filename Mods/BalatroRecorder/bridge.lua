@@ -18,14 +18,21 @@ local function state_name()
     return tostring(G.STATE)
 end
 
--- Encode hand cards with 1-based idx for command use
+-- Encode hand cards with 1-based idx for command use.
+-- Respects face-down state: if the card is facing away from the player
+-- (blind abilities like The House flip cards), emit only idx and facing="down"
+-- so the agent sees exactly what a human would see.
 local function encode_hand()
     local enc = require("encoder")
     local out = {}
     for i, c in ipairs(G.hand and G.hand.cards or {}) do
-        local t = enc.card(c)
-        t.idx = i
-        table.insert(out, t)
+        if c.facing == 'back' then
+            table.insert(out, { idx = i, facing = "down" })
+        else
+            local t = enc.card(c)
+            t.idx = i
+            table.insert(out, t)
+        end
     end
     return out
 end
@@ -75,7 +82,8 @@ function Bridge.write_state()
         chips_needed  = s.chips_needed,
         dollars       = s.dollars,
         hand          = encode_hand(),
-        jokers        = enc.joker_list(G.jokers and G.jokers.cards or {}),
+        jokers        = enc.joker_list(G.jokers and G.jokers.cards or {}, "Joker"),
+        vouchers      = enc.joker_list(G.jokers and G.jokers.cards or {}, "Voucher"),
         consumables   = enc.consumable_list(G.consumeables and G.consumeables.cards or {}),
         shop = {
             jokers   = encode_shop_area(G.shop_jokers),
@@ -191,7 +199,21 @@ function Bridge.execute(cmd)
         end
 
     elseif action == "sell" then
-        local card = G.jokers and G.jokers.cards and G.jokers.cards[cmd.joker_slot or 1]
+        -- joker_slot is 1-based index into the jokers[] array in state.json,
+        -- which contains only "Joker"-set items. We must find the Nth joker
+        -- within G.jokers.cards (which also contains vouchers).
+        local target_slot = cmd.joker_slot or 1
+        local joker_count = 0
+        local card = nil
+        for _, j in ipairs(G.jokers and G.jokers.cards or {}) do
+            if (j.ability or {}).set == "Joker" then
+                joker_count = joker_count + 1
+                if joker_count == target_slot then
+                    card = j
+                    break
+                end
+            end
+        end
         if card then
             G.FUNCS.sell_card({config = {ref_table = card}})
         end

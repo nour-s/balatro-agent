@@ -14,13 +14,13 @@ description: "Resume playing Balatro as an AI agent. Covers launch, file locatio
 
 ## Launch
 
-**Step 1 — Check if already running** by reading state.json timestamp:
+**Step 1 — Check if already running:**
 ```bash
-ls -la ~/balatro-logs/state.json
+pgrep -x Balatro
 ```
-If the timestamp is recent (within last 60s) AND state is not GAME_OVER, the game is running — skip to reading state. Do NOT launch a second instance.
+If it prints a PID → game is running, skip to reading state. That's it. No file guessing.
 
-If state.json is stale or missing, the game is NOT running. `pgrep` is unreliable in this sandbox — use the file timestamp as the source of truth.
+If no PID → game is NOT running, proceed with launch steps below.
 
 **Step 2 — Kill any zombie process** before launching:
 ```bash
@@ -38,11 +38,12 @@ cd ~/Library/Application\ Support/Steam/steamapps/common/Balatro/Balatro.app/Con
 ```
 Steam must be running first. Without Lovely Injector the mod doesn't load and no bridge files appear.
 
-**Step 5 — Confirm it's running:** poll state.json every 3s until the timestamp updates and state is not SPLASH. Takes ~15-20s.
+**Step 5 — Confirm it's running:** wait ~15s then check the process and state:
 ```bash
-sleep 15 && ls -la ~/balatro-logs/state.json && cat ~/balatro-logs/state.json
+sleep 15 && pgrep -x Balatro && cat ~/balatro-logs/state.json
 ```
-If state.json timestamp hasn't changed after 20s, the launch failed — check launch.log.
+If no PID after 20s, or state.json doesn't exist, the launch failed — check launch.log.
+Wait for state to leave SPLASH before acting.
 
 Mod files live in:
 ```
@@ -80,6 +81,9 @@ Full schema:
   "jokers": [
     {"pos": 0, "key": "j_ice_cream", "name": "Ice Cream", "extra": {"chips": 95, "chip_mod": 5}}
   ],
+  "vouchers": [
+    {"pos": 0, "key": "v_overstock_norm", "name": "Overstock", "set": "Voucher"}
+  ],
   "consumables": [],
   "shop": {
     "jokers":   [{"slot": 1, "key": "j_foo", "name": "Foo Joker", "cost": 6}],
@@ -90,6 +94,8 @@ Full schema:
 ```
 
 **`idx`** is the 1-based position of each card in hand — use it for all play/discard commands.
+
+**Face-down cards:** Some blind abilities (e.g. The House) flip cards face-down. When a card is face-down, state.json emits only `{"idx": N, "facing": "down"}` with no suit or value — exactly what a human player would see. Treat face-down cards as unknown. Do NOT assume their value. You may still play or discard them by `idx`, but you cannot know what they are.
 
 **`chips_needed` bug (partially fixed):** Was always 0 due to reading the wrong Balatro field. The fix in snapshot.lua tries `G.GAME.blind.chips` then falls back to `G.GAME.blind.config.blind.chips`. If it still shows 0, use this table:
 
@@ -265,12 +271,15 @@ Best to worst:
 | state.json silent during SPLASH | **Fixed** in bridge.lua | Now writes `{"state":"SPLASH"}` when G.GAME is nil so agent knows game is loading |
 | Main menu overlay stuck on screen | **Fixed** in bridge.lua | `start_run` now routes through `G.FUNCS.start_run` so `G:delete_run()` fires and removes `G.MAIN_MENU_UI` |
 | Module cache: edits need restart | **By design** | Restart game after any bridge.lua / snapshot.lua change |
+| Vouchers mixed into jokers[] | **Fixed** in bridge.lua + encoder.lua | `jokers[]` now only contains Joker-set items; owned vouchers appear in `vouchers[]`. `sell` command references joker_slot into jokers-only list. |
+| Face-down cards exposed raw | **Fixed** in bridge.lua | Cards with `facing == 'back'` emit `{idx, facing:"down"}` only — no suit/value leaked. |
 
 ---
 
+
 ## Play Session Checklist
 
-1. **Verify the game is running** — use the Launch section checklist (timestamp check, kill zombie, delete stale command.json, launch, confirm).
+1. **Verify the game is running** — `pgrep -x Balatro`. If no PID, follow the Launch steps.
 2. Read state.json — confirm it exists and `state` is a known value
 3. If state is SPLASH: wait, re-read every 3s until it changes (game still loading)
 4. Confirm command.json does NOT exist (no stuck command)
