@@ -12,6 +12,7 @@ writes ~/balatro-logs/command.json, waits for the game to consume it, repeats.
 import argparse
 import json
 import os
+import subprocess
 import sys
 import time
 import urllib.request
@@ -86,6 +87,15 @@ KNOWN_ACTIONS = {
     "play", "discard", "select_blind", "skip_blind", "cash_out",
     "buy", "sell", "reroll_shop", "next_round", "start_run",
     "reroll_boss", "use_consumable",
+}
+
+VALID_ACTIONS_BY_STATE = {
+    "BLIND_SELECT":    {"select_blind", "skip_blind"},
+    "SELECTING_HAND":  {"play", "discard"},
+    "ROUND_EVAL":      {"cash_out"},
+    "SHOP":            {"buy", "sell", "reroll_shop", "next_round"},
+    "MENU":            {"start_run"},
+    "GAME_OVER":       {"start_run"},
 }
 
 
@@ -207,6 +217,60 @@ def ask_ollama(base_url, model, state, wiki_context="", timeout=30):
     return action, elapsed
 
 
+BALATRO_EXE = os.path.expanduser(
+    "~/Library/Application Support/Steam/steamapps/common/Balatro"
+    "/Balatro.app/Contents/MacOS"
+)
+LAUNCH_LOG  = os.path.expanduser("~/balatro-logs/launch.log")
+LAUNCH_WAIT_S = 20   # seconds to wait for game to produce a state after launch
+
+
+def game_running():
+    return subprocess.run(["pgrep", "-x", "Balatro"],
+                          capture_output=True).returncode == 0
+
+
+def launch_game():
+    """Launch Balatro via Lovely if it is not already running."""
+    if game_running():
+        log("Game already running — skipping launch.")
+        return
+
+    log("Game not running — launching Balatro...")
+
+    # Kill any zombie first
+    subprocess.run(["pkill", "-x", "Balatro"], capture_output=True)
+    time.sleep(1)
+
+    # Remove any stale command so it isn't consumed on startup
+    for path in (CMD_FILE, CMD_FILE + "~"):
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            pass
+
+    os.makedirs(os.path.dirname(LAUNCH_LOG), exist_ok=True)
+    with open(LAUNCH_LOG, "a") as logf:
+        subprocess.Popen(
+            ["sh", "run_lovely_macos.sh"],
+            cwd=BALATRO_EXE,
+            stdout=logf,
+            stderr=logf,
+            start_new_session=True,
+        )
+
+    log(f"Launched. Waiting up to {LAUNCH_WAIT_S}s for game state...")
+    deadline = time.monotonic() + LAUNCH_WAIT_S
+    while time.monotonic() < deadline:
+        time.sleep(2)
+        if game_running():
+            state, _ = read_state()
+            if state is not None:
+                log("Game is up and writing state.")
+                return
+    log("WARNING: game did not produce state.json within timeout — check launch.log")
+
+
 # ── main loop ─────────────────────────────────────────────────────────────────
 
 def run_agent(base_url, model, no_rag=False):
@@ -229,6 +293,9 @@ def run_agent(base_url, model, no_rag=False):
         sys.exit(1)
 
     log(f"Ollama OK. Model '{model}' ready. Watching for game state...\n")
+
+    # Launch the game if it isn't already running
+    launch_game()
 
     # Init RAG index
     rag = None
@@ -325,6 +392,15 @@ def run_agent(base_url, model, no_rag=False):
                 break
             continue
 
+        # ── deterministic states — no LLM needed ──────────────────────────
+        if current_state_name == "MENU":
+            log(summarize_state(state))
+            action = {"action": "start_run"}
+            log(f"  → {json.dumps(action)}  (deterministic)")
+            write_command(action)
+            wait_command_consumed()
+            continue
+
         # ── patch chips_needed if needed ───────────────────────────────────
         state = fix_chips_needed(state)
 
@@ -349,6 +425,12 @@ def run_agent(base_url, model, no_rag=False):
             log("  No valid action returned — retrying next poll")
             time.sleep(1)
             last_state_str = None  # force re-ask on next loop
+            continue
+
+        valid = VALID_ACTIONS_BY_STATE.get(current_state_name)
+        if valid and action.get("action") not in valid:
+            log(f"  WARNING: '{action.get('action')}' invalid for state {current_state_name} — skipping")
+            last_state_str = None
             continue
 
         # ── write command and wait for consumption ─────────────────────────

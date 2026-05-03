@@ -6,7 +6,8 @@ description: "Resume playing Balatro as an AI agent. Covers launch, file locatio
 # Playing Balatro — AI Agent Resume Guide
 
 ## TL;DR
-- User runs the game. You read `~/balatro-logs/state.json` and write `~/balatro-logs/command.json`.
+- `agent.py` launches Balatro automatically if it is not already running.
+- You read `~/balatro-logs/state.json` and write `~/balatro-logs/command.json`.
 - Command is executed when the file disappears (game deletes it after consuming).
 - All actions use `hand_indices` (1-based `idx` from state.json), not card strings.
 

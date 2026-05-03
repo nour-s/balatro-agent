@@ -222,7 +222,9 @@ def _state_to_query(state):
         names = [c.get("name", c.get("key", "")) for c in consumables]
         parts.append(f"consumables: {', '.join(names)}")
 
-    if game_state == "BLIND_SELECT":
+    if game_state == "MENU":
+        return "starting a new Balatro run, deck selection, stake, seed"
+    elif game_state == "BLIND_SELECT":
         parts.append("selecting blind, deciding whether to skip or select")
     elif game_state == "SELECTING_HAND":
         chips_needed = state.get("chips_needed", 0)
