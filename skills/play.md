@@ -294,6 +294,33 @@ Best to worst:
 
 ---
 
+## Local LLM Agent
+
+Run the agent instead of playing manually:
+```bash
+python3 agent.py --model qwen2.5:7b   # with RAG wiki context (default)
+python3 agent.py --no-rag             # faster, no wiki knowledge
+```
+
+The agent reads state.json, retrieves relevant wiki articles via RAG, asks Ollama, writes command.json, and repeats. It handles all WAIT_STATES automatically.
+
+### RAG vector index (`vectors/`)
+
+- **Gitignored** — not in the repo, lives only on disk.
+- **Built once automatically** on first `agent.py` run (or `python3 rag.py --build`). Takes ~2 min, embeds all 262 wiki files with `nomic-embed-text`.
+- **Persists across restarts** — subsequent runs open the existing index instantly (~1s).
+- **Only needs rebuilding if:**
+  - `vectors/` is deleted (e.g. after a fresh clone or disk wipe)
+  - Wiki files are updated and you want new content in search (`python3 rag.py --build` adds new files; `--force` re-embeds everything)
+- **Prerequisite:** `nomic-embed-text` must be pulled in Ollama: `ollama pull nomic-embed-text`
+
+Benchmark a model (with realistic RAG overhead):
+```bash
+python3 benchmark.py --model qwen2.5:7b --rag --states 10
+```
+
+---
+
 ## Critical Files
 
 | File | Purpose |
@@ -303,4 +330,10 @@ Best to worst:
 | `Mods/BalatroRecorder/bridge.lua` | IPC layer: write_state, read_command, execute |
 | `Mods/BalatroRecorder/snapshot.lua` | compact() — what gets serialized into state.json |
 | `Mods/BalatroRecorder/init.lua` | Hooks and frame polling (calls bridge every ~30 frames) |
+| `agent.py` | Autonomous Ollama agent — drives the game end-to-end |
+| `rag.py` | RAG module: embed/index/retrieve wiki articles |
+| `benchmark.py` | Latency/quality benchmarker using real JSONL game states |
+| `scrape_wiki.py` | One-time wiki scraper — rebuilds `wiki/` from balatrowiki.org |
+| `wiki/` | 262 markdown files: jokers, tarot, planet, spectral, voucher, blind, mechanic |
+| `vectors/` | lancedb index (gitignored, auto-generated from wiki/) |
 | `skills/balatro.md` | Deep reference: recorder architecture, all event types, Balatro internals |
