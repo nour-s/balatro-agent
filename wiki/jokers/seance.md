@@ -1,0 +1,3 @@
+# Séance
+
+mw-parser-output" lang="en" dir="ltr"> Séance Effect If poker hand is a Straight Flush , create a random Spectral card (Must have room) Rarity .rarity{color:white;border:none;cursor:pointer;text-transform:none;clip-path:var(--corner-sm);font-family:"m6x11";font-size:18px;letter-spacing:1px;text-shadow:0 2px #2f2f2fa1;padding:3px 5px 5px 8px;line-height:1;align-items:center;display:inline-flex;min-width:80px;justify-content:center} .rarity.common{background-colo

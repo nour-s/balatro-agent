@@ -18,3 +18,10 @@ Balatro.exe
 UNTESTED-*
 pr-plan.md
 __pycache__/
+*.pyc
+
+# RAG vector index — auto-generated from wiki/ on first run
+vectors/
+
+# Scratch directory
+tmp/
