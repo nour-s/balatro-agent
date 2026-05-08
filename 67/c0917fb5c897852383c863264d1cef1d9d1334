@@ -1,0 +1,27 @@
+Mods/BalatroRecorder/bridge.lua
+  s_5a3ab0effa8ef2::t_1f65a8a3b28f91 40-42,48-64
+  s_5a3ab0effa8ef2::t_02ea454fb224da 217-226
+  s_5a3ab0effa8ef2::t_8807709cd45f92 107-110
+skills/play.md
+  s_5a3ab0effa8ef2::t_a5c75dfc4f5246 90-93
+  s_5a3ab0effa8ef2::t_79cf2457d7db98 166,170-171,173
+  s_5a3ab0effa8ef2::t_154e179535add2 172
+  s_5a3ab0effa8ef2::t_fc941f2abc93ca 282
+  s_5a3ab0effa8ef2::t_f9f3f7c6201c8a 283
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "67c0917fb5c897852383c863264d1cef1d9d1334",
+  "prompts": {},
+  "sessions": {
+    "s_5a3ab0effa8ef2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d823662f-479f-496b-ad1e-8086211582a0",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "Nour Sabouny <mohamad.sabouny@talabat.com>"
+    }
+  }
+}
