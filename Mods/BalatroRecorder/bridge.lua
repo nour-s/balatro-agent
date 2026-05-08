@@ -37,13 +37,31 @@ local function encode_hand()
     return out
 end
 
--- Encode one shop CardArea into {slot, key, cost, ...} list
-local function encode_shop_area(area)
+-- Encode one shop CardArea into {slot, key, cost, ...} list.
+-- If set_filter is given, only include items whose set matches.
+local function encode_shop_area(area, set_filter)
     local enc = require("encoder")
     local out = {}
     for i, c in ipairs(area and area.cards or {}) do
         local item = enc.shop_item(c)
         if item then
+            if not set_filter or item.set == set_filter then
+                item.slot = i
+                table.insert(out, item)
+            end
+        end
+    end
+    return out
+end
+
+-- Encode non-joker items from G.shop_jokers (planets, tarots, spectrals).
+-- These use area:"joker" in the buy command but are consumables, not jokers.
+local function encode_shop_consumables(area)
+    local enc = require("encoder")
+    local out = {}
+    for i, c in ipairs(area and area.cards or {}) do
+        local item = enc.shop_item(c)
+        if item and item.set ~= "Joker" then
             item.slot = i
             table.insert(out, item)
         end
@@ -86,9 +104,10 @@ function Bridge.write_state()
         vouchers      = enc.joker_list(G.jokers and G.jokers.cards or {}, "Voucher"),
         consumables   = enc.consumable_list(G.consumeables and G.consumeables.cards or {}),
         shop = {
-            jokers   = encode_shop_area(G.shop_jokers),
-            vouchers = encode_shop_area(G.shop_vouchers),
-            boosters = encode_shop_area(G.shop_booster),
+            jokers       = encode_shop_area(G.shop_jokers, "Joker"),
+            consumables  = encode_shop_consumables(G.shop_jokers),
+            vouchers     = encode_shop_area(G.shop_vouchers),
+            boosters     = encode_shop_area(G.shop_booster),
         },
     }
 
@@ -195,7 +214,16 @@ function Bridge.execute(cmd)
         local area = area_map[cmd.area or "joker"]
         local card = area and area.cards and area.cards[cmd.slot or 1]
         if card then
-            G.FUNCS.buy_from_shop({config = {ref_table = card}})
+            local ability_set = (card.ability or {}).set
+            if ability_set == "Voucher" then
+                -- Vouchers must go through "buy_and_use" so the game calls
+                -- card:redeem() which applies the effect and plays the animation.
+                -- Plain buy_from_shop only emplaces the card into G.jokers
+                -- without ever redeeming it.
+                G.FUNCS.buy_from_shop({config = {id = 'buy_and_use', ref_table = card}})
+            else
+                G.FUNCS.buy_from_shop({config = {ref_table = card}})
+            end
         end
 
     elseif action == "sell" then

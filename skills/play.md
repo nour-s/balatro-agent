@@ -87,9 +87,10 @@ Full schema:
   ],
   "consumables": [],
   "shop": {
-    "jokers":   [{"slot": 1, "key": "j_foo", "name": "Foo Joker", "cost": 6}],
-    "vouchers": [{"slot": 1, "key": "v_foo", "name": "Foo Voucher", "cost": 10}],
-    "boosters": [{"slot": 1, "key": "p_foo", "name": "Foo Pack",   "cost": 4}]
+    "jokers":      [{"slot": 1, "key": "j_foo",  "name": "Foo Joker",   "cost": 6,  "set": "Joker"}],
+    "consumables": [{"slot": 2, "key": "c_venus", "name": "Venus",       "cost": 3,  "set": "Planet"}],
+    "vouchers":    [{"slot": 1, "key": "v_foo",  "name": "Foo Voucher", "cost": 10, "set": "Voucher"}],
+    "boosters":    [{"slot": 1, "key": "p_foo",  "name": "Foo Pack",    "cost": 4,  "set": "Booster"}]
   }
 }
 ```
@@ -162,9 +163,14 @@ Transitions to SHOP.
 {"action": "next_round"}
 ```
 
-`slot` is 1-based from `shop.jokers[]`, `shop.vouchers[]`, or `shop.boosters[]` in state.json.
+`slot` is 1-based from `shop.jokers[]`, `shop.consumables[]`, `shop.vouchers[]`, or `shop.boosters[]` in state.json.
 `joker_slot` is 1-based from the `jokers[]` array.
 `next_round` calls `G.FUNCS.toggle_shop` to leave the shop and go to BLIND_SELECT.
+
+**`shop.jokers[]`** — actual Joker-set cards only. Use `area: "joker"`.
+**`shop.consumables[]`** — planet/tarot/spectral cards from the same shop slot area. Also use `area: "joker"` (same `G.shop_jokers` area in the game). Buy these then immediately `use_consumable` them.
+**`shop.vouchers[]`** — vouchers. Use `area: "voucher"`. **Self-apply at purchase — no `use_consumable` needed.** The bridge internally uses `buy_and_use` so the game calls `card:redeem()` which plays the animation and applies the effect. They do NOT appear in the UI afterward — only visible under Run Info → Vouchers.
+**`shop.boosters[]`** — booster packs. Cannot be opened; skip them.
 
 **Cannot open booster packs** — `buy` with `area: "booster"` is not implemented. Skip packs entirely.
 
@@ -273,6 +279,8 @@ Best to worst:
 | Main menu overlay stuck on screen | **Fixed** in bridge.lua | `start_run` now routes through `G.FUNCS.start_run` so `G:delete_run()` fires and removes `G.MAIN_MENU_UI` |
 | Module cache: edits need restart | **By design** | Restart game after any bridge.lua / snapshot.lua change |
 | Vouchers mixed into jokers[] | **Fixed** in bridge.lua + encoder.lua | `jokers[]` now only contains Joker-set items; owned vouchers appear in `vouchers[]`. `sell` command references joker_slot into jokers-only list. |
+| Planet/tarot mixed into shop.jokers[] | **Fixed** in bridge.lua | `shop.jokers[]` now only contains Joker-set items; planets/tarots appear in `shop.consumables[]`. Both use `area:"joker"` to buy. |
+| Vouchers stuck in joker row, effect never applied | **Fixed** in bridge.lua | Vouchers now bought via `buy_and_use` so the game calls `card:redeem()` → `apply_to_run()`. Previously plain `buy_from_shop` emplaced them into `G.jokers` without redeeming. |
 | Face-down cards exposed raw | **Fixed** in bridge.lua | Cards with `facing == 'back'` emit `{idx, facing:"down"}` only — no suit/value leaked. |
 
 ---

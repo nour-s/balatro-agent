@@ -164,12 +164,17 @@ class RagIndex:
         except Exception as e:
             return f"(RAG unavailable: {e})"
 
-        results = (
-            self._tbl.search(q_vec)
-            .limit(top_k)
-            .select(["name", "type", "content"])
-            .to_list()
-        )
+        import logging
+        logging.disable(logging.WARNING)
+        try:
+            results = (
+                self._tbl.search(q_vec)
+                .limit(top_k)
+                .select(["name", "type", "content"])
+                .to_list()
+            )
+        finally:
+            logging.disable(logging.NOTSET)
 
         if not results:
             return ""
@@ -232,6 +237,8 @@ def _state_to_query(state):
         hands_left = state.get("hands_left", 4)
         discards_left = state.get("discards_left", 3)
         parts.append(f"need {chips_needed - chips_scored} more chips, {hands_left} hands {discards_left} discards left")
+        if not jokers:
+            parts.append("no jokers yet, basic hand strategy, scoring without jokers")
         parts.append("deciding which cards to play or discard")
     elif game_state == "SHOP":
         parts.append("in shop deciding what to buy, sell or skip")

@@ -27,7 +27,7 @@ except ImportError:
 
 # ── config ───────────────────────────────────────────────────────────────────
 OLLAMA_BASE_URL = "http://localhost:11434"
-DEFAULT_MODEL   = "qwen2.5:7b"
+DEFAULT_MODEL   = "qwen3:14b"
 STATE_FILE      = os.path.expanduser("~/balatro-logs/state.json")
 CMD_FILE        = os.path.expanduser("~/balatro-logs/command.json")
 STATE_STALE_S   = 60    # warn if state.json hasn't changed in this many seconds
@@ -58,7 +58,9 @@ Always play 5 cards to maximise chip contribution even on High Card hands.
 
 == VALID ACTIONS BY STATE ==
 BLIND_SELECT:  {"action":"select_blind"} | {"action":"skip_blind"}
-SELECTING_HAND: {"action":"play","hand_indices":[1,2,3,4,5]} | {"action":"discard","hand_indices":[3,4]}
+SELECTING_HAND: {"action":"play","hand_indices":[i,j,k,l,m]} | {"action":"discard","hand_indices":[i,j]}
+  hand_indices are the "idx" values of the cards from the hand array. Always pick exactly 5 cards to play.
+  Choose the idx values that form the highest-ranked poker hand possible.
 ROUND_EVAL:    {"action":"cash_out"}
 SHOP:          {"action":"buy","area":"joker","slot":1} | {"action":"buy","area":"voucher","slot":1}
                {"action":"sell","joker_slot":2} | {"action":"reroll_shop"} | {"action":"next_round"}
@@ -163,19 +165,25 @@ def summarize_state(state):
             + (f"  hand=[{hand_str}]" if hand_str else ""))
 
 
+
 # ── Ollama call ───────────────────────────────────────────────────────────────
 
-def ask_ollama(base_url, model, state, wiki_context="", timeout=30):
+def ask_ollama(base_url, model, state, wiki_context="", timeout=300):
     """Send state (+ optional wiki context) to Ollama, return parsed action or None."""
     user_content = f"Current game state:\n{json.dumps(state, indent=2)}"
     if wiki_context:
         user_content += f"\n\n== RELEVANT WIKI KNOWLEDGE ==\n{wiki_context}"
-    user_content += "\n\nRespond with the action JSON only."
+    user_content += "\n\nThink through the best action step by step, then output your final answer as a single JSON object on its own line."
 
     payload = {
         "model":  model,
         "stream": False,
-        "format": "json",
+        "options": {
+            "temperature":    0.2,   # near-deterministic poker decisions
+            "top_p":          0.9,
+            "num_ctx":        16384,  # room for thinking + state + wiki
+            "repeat_penalty": 1.1,
+        },
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user",   "content": user_content},
@@ -203,10 +211,18 @@ def ask_ollama(base_url, model, state, wiki_context="", timeout=30):
     eval_duration = data.get("eval_duration", 1)
     toks_per_sec  = eval_count / (eval_duration / 1e9) if eval_count else 0.0
 
-    try:
-        action = json.loads(content.strip())
-    except Exception:
-        log(f"  Model returned non-JSON: {content[:80]}")
+    action = None
+    # try each line for a valid JSON object (model may think out loud first)
+    for line in reversed(content.strip().splitlines()):
+        line = line.strip()
+        if line.startswith("{") and line.endswith("}"):
+            try:
+                action = json.loads(line)
+                break
+            except Exception:
+                pass
+    if action is None:
+        log(f"  No JSON found in response: {content[:120]}")
         return None, elapsed
 
     if action.get("action") not in KNOWN_ACTIONS:
@@ -226,7 +242,7 @@ LAUNCH_WAIT_S = 20   # seconds to wait for game to produce a state after launch
 
 
 def game_running():
-    return subprocess.run(["pgrep", "-x", "Balatro"],
+    return subprocess.run(["pgrep", "-x", "love"],
                           capture_output=True).returncode == 0
 
 
@@ -239,7 +255,7 @@ def launch_game():
     log("Game not running — launching Balatro...")
 
     # Kill any zombie first
-    subprocess.run(["pkill", "-x", "Balatro"], capture_output=True)
+    subprocess.run(["pkill", "-x", "love"], capture_output=True)
     time.sleep(1)
 
     # Remove any stale command so it isn't consumed on startup
@@ -318,7 +334,7 @@ def run_agent(base_url, model, no_rag=False):
                                      data=json.dumps(_warmup_payload).encode(),
                                      headers={"Content-Type": "application/json"},
                                      method="POST")
-        with urllib.request.urlopen(req, timeout=30):
+        with urllib.request.urlopen(req, timeout=120):
             pass
         log("Model warm.\n")
     except Exception as e:
@@ -377,19 +393,11 @@ def run_agent(base_url, model, no_rag=False):
             jokers = [j.get("name", j.get("key", "?")) for j in state.get("jokers", [])]
             log(f"\nGAME OVER — reached Ante {ante} Round {rnd}")
             log(f"Final jokers: {jokers or 'none'}")
-            print("\nStart a new run? [y/N] ", end="", flush=True)
-            try:
-                answer = input().strip().lower()
-            except (EOFError, KeyboardInterrupt):
-                answer = "n"
-            if answer == "y":
-                log("Starting new run...")
-                write_command({"action": "start_run"})
-                wait_command_consumed()
-                last_state_str = None
-            else:
-                log("Exiting agent.")
-                break
+            log("Auto-restarting run...")
+            write_command({"action": "start_run"})
+            wait_command_consumed()
+            time.sleep(3)  # let screenwipe/transition finish
+            last_state_str = None
             continue
 
         # ── deterministic states — no LLM needed ──────────────────────────
@@ -400,6 +408,10 @@ def run_agent(base_url, model, no_rag=False):
             write_command(action)
             wait_command_consumed()
             continue
+
+        # ── let screenwipe finish before acting on blind select ────────────
+        if current_state_name == "BLIND_SELECT":
+            time.sleep(2)
 
         # ── patch chips_needed if needed ───────────────────────────────────
         state = fix_chips_needed(state)
