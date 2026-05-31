@@ -92,20 +92,22 @@ git remote set-url origin https://github.com/nour-s/<REPO_NAME>.git
 
 ### 9. Push
 
-**IMPORTANT:** The `GITHUB_TOKEN` env var in this session is bound to `nour-sb`, not `nour-s`.  
-Tell the user to run this themselves from their terminal:
+`GITHUB_TOKEN` in this session is bound to `nour-sb`. The workaround that works:
 
 ```bash
-unset GITHUB_TOKEN && git -C <FOLDER> push -u origin main
+env -u GITHUB_TOKEN bash -c '
+  gh auth switch --user nour-s &&
+  git remote set-url origin https://nour-s@github.com/nour-s/<REPO_NAME>.git &&
+  git config --local credential.helper "" &&
+  git config --local --add credential.helper "!gh auth git-credential" &&
+  git push -u origin main
+'
 ```
 
-When prompted:
-- Username: `nour-s`
-- Password: nour-s personal access token (from https://github.com/settings/tokens)
-
-If they want Claude to push automatically in future sessions, they should:
-- Remove `GITHUB_TOKEN` from their shell profile, or
-- Set `GITHUB_TOKEN` to a nour-s token instead
+Key details:
+- `env -u GITHUB_TOKEN bash -c '...'` runs the whole block without GITHUB_TOKEN, so `gh` uses the keyring and picks nour-s after the switch.
+- `https://nour-s@github.com/...` embeds the username in the URL, preventing git from defaulting to the osxkeychain cached nour-sb credentials.
+- Clearing `credential.helper ""` then re-adding `!gh auth git-credential` ensures no osxkeychain fallback.
 
 ### 10. Confirm
 
@@ -119,6 +121,6 @@ Report the URL to the user.
 ## Notes
 
 - `gh repo create` works with `env -u GITHUB_TOKEN` because gh falls back to the keyring and nour-s is the active keyring account.
-- `git push` falls back to macOS osxkeychain which returns nour-sb's token — this is why the user must push manually from their own terminal session.
+- `git push` normally falls back to macOS osxkeychain which returns nour-sb's token. The fix: embed the username in the remote URL (`https://nour-s@github.com/...`) and clear the credential helper chain before adding `!gh auth git-credential`.
 - `git filter-branch` requires a clean working tree. Commit or stash changes first.
 - Never commit `.claude/` — add it to `.gitignore` before the initial commit.
