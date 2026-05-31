@@ -1,0 +1,20 @@
+skills/github-publish.md
+  s_1e5df3e68c33fc::t_a1fb39f196ea5f 77-78
+  s_1e5df3e68c33fc::t_499c20b8af7f71 3,6,9-13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "178bc4bdf5a405545ee17435e8aa218e6b73a759",
+  "prompts": {},
+  "sessions": {
+    "s_1e5df3e68c33fc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c1d358c6-f853-43b8-9946-6ced6589d529",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "nour-s <nour-s@users.noreply.github.com>"
+    }
+  }
+}
