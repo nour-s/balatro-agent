@@ -39,6 +39,8 @@ cd ~/Library/Application\ Support/Steam/steamapps/common/Balatro/Balatro.app/Con
 ```
 Steam must be running first. Without Lovely Injector the mod doesn't load and no bridge files appear.
 
+> **Note:** The `love` binary in `MacOS/` has been replaced with a wrapper script that injects `liblovely.dylib` via `DYLD_INSERT_LIBRARIES`. The real binary is `love.real`. This means launching from Steam directly also loads Lovely — `run_lovely_macos.sh` is now redundant but kept as a fallback.
+
 **Step 5 — Confirm it's running:** wait ~15s then check the process and state:
 ```bash
 sleep 15 && pgrep -x Balatro && cat ~/balatro-logs/state.json
