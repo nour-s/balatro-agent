@@ -1,0 +1,34 @@
+saves-snapshot.sh
+  s_2f96d7c71c2f04::t_2b1dc8df9d599a 1-64
+skills/play.md
+  s_aa47eae93b8ad5::t_3c25258e3595a2 42-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "4d3f782f7df76e4c383d9c1bf3a99322ab60f160",
+  "prompts": {},
+  "humans": {
+    "h_beb3697ab05111": {
+      "author": "Nour Sabouny <mohamad.sabouny@talabat.com>"
+    }
+  },
+  "sessions": {
+    "s_2f96d7c71c2f04": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a7279e95-5729-412c-9c1f-44383631c55b",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "nour-s <nour-s@users.noreply.github.com>"
+    },
+    "s_aa47eae93b8ad5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e6e2e9fd-0685-42fe-acd4-35cd90bff92f",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "nour-s <nour-s@users.noreply.github.com>"
+    }
+  }
+}
