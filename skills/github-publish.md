@@ -1,12 +1,16 @@
 ---
 name: github-publish
-description: "Publish a local folder as a new public GitHub repo under nour-s. Rewrites commit authors, creates the repo, and pushes. Run this skill when the user wants to push a project to GitHub."
+description: "Publish a local folder as a new public GitHub repo under nour-s (personal account). Rewrites commit authors, creates the repo, and pushes. Run this skill when the user wants to push a personal project to GitHub."
 ---
 
-# Publish a folder to GitHub (nour-s account)
+# Publish a folder to GitHub (nour-s personal account)
 
 ## Goal
-Create a new public GitHub repo under `nour-s` from a local folder and push it — with all commits attributed to `nour-s`, no real name or email exposed.
+Create a new public GitHub repo under `nour-s` (personal account) from a local folder and push it — with all commits attributed to `nour-s`, no real name or email exposed.
+
+**IMPORTANT — account selection:**
+- `nour-s` = personal GitHub account. Use this skill for personal/side projects.
+- `nour-sb` = company GitHub account. Do NOT use this skill for work repos — handle those separately with the company's standard process.
 
 ## Steps
 
@@ -69,6 +73,8 @@ git add -A
 git status   # review what's about to be committed — look for unexpected files
 git commit -m "initial commit"
 ```
+
+Do NOT add a `Co-Authored-By: Claude ...` trailer to any commit message. Commits should only list the user as author.
 
 Skip if the repo already has commits and nothing is pending.
 
